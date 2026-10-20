@@ -59,7 +59,7 @@
 
 /* ערכה בהירה: לפי הגדרות מערכת ההפעלה, אלא אם המשתמש בחר "כהה" ידנית */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
+  :root:not([data-theme]) {
     --bg: #eef2f7; --panel: #ffffff; --panel-2: #f6f8fb; --border: #cbd5e1;
     --text: #0f172a; --muted: #475569; --accent: #0369a1; --accent-ink: #ffffff; --focus: #b45309;
     --ocean: #e6eef8; --graticule: #d3deeb; --land: #dfe5ed; --land-stroke: #aab7c8;
@@ -84,6 +84,22 @@
   --demo: #5b21b6; --demo-bg: #ede9fe; --real: #075985; --real-bg: #e0f2fe;
   --sim-bg: #e2e8f0; --sim-text: #334155; --row-new: rgba(3, 105, 161, .12); --row-hover: #f1f5f9;
   --tooltip-bg: #ffffff; --shadow: rgba(15, 23, 42, .18);
+}
+
+/* ערכת "האקר": שחור וירוק ניאון, כמו מסוף (טרמינל) ישן */
+:root[data-theme="hacker"] {
+  --bg: #000000; --panel: rgba(0, 12, 3, .8); --panel-2: #031207; --border: #0f4a1c;
+  --text: #39ff6a; --muted: #22b34a; --accent: #00ff41; --accent-ink: #000000; --focus: #e5ff00;
+  --ocean: #000000; --graticule: #06290e; --land: #03170a; --land-stroke: #0e5a22;
+  --heat-0: #0a3a14; --heat-1: #0f6b22; --heat-2: #18a336; --heat-3: #3dff6e; --heat-4: #d8ffe0;
+  --sev-low: #00ff41; --sev-medium: #e5ff00; --sev-high: #ffae00; --sev-critical: #ff2e4d;
+  --sev-low-bg: rgba(0, 255, 65, .1); --sev-medium-bg: rgba(229, 255, 0, .1);
+  --sev-high-bg: rgba(255, 174, 0, .12); --sev-critical-bg: rgba(255, 46, 77, .14);
+  --hot: #ff2e4d; --warn: #e5ff00; --warn-bg: #141600; --warn-border: #6b7300;
+  --demo: #00ff41; --demo-bg: #001a07; --real: #00ff41; --real-bg: #001a07;
+  --sim-bg: #0a3a14; --sim-text: #9dffb4; --row-new: rgba(0, 255, 65, .16); --row-hover: #04200b;
+  --tooltip-bg: #000a03; --shadow: rgba(0, 255, 65, .18);
+  --glow: rgba(0, 255, 65, .55); --scanline: rgba(0, 255, 65, .035); --rain: #00ff41;
 }
 
 * { box-sizing: border-box; }
@@ -305,6 +321,33 @@ select { cursor: pointer; }
 footer.site { border-top: 1px solid var(--border); background: var(--panel); color: var(--muted); font-size: .85rem; }
 .footer-inner { display: flex; flex-wrap: wrap; gap: 6px 24px; justify-content: space-between; padding-block: 12px; }
 
+/* ---------- אפקטים של ערכת "האקר" ---------- */
+/* "גשם דיגיטלי" ברקע (מצויר ב-JavaScript על canvas) */
+#matrix-rain { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: .45; pointer-events: none; }
+header.site, #warnings, main, footer.site { position: relative; z-index: 1; }
+[data-theme="hacker"] body,
+[data-theme="hacker"] button,
+[data-theme="hacker"] select,
+[data-theme="hacker"] input { font-family: "Cascadia Mono", Consolas, "Courier New", monospace; }
+[data-theme="hacker"] body { background: var(--bg); }
+[data-theme="hacker"] header.site { background: var(--panel); }
+/* זוהר ירוק לכותרות ולמספרים */
+[data-theme="hacker"] h1, [data-theme="hacker"] h2,
+[data-theme="hacker"] .stat-value, [data-theme="hacker"] .badge-bar { text-shadow: 0 0 6px var(--glow); }
+[data-theme="hacker"] .panel, [data-theme="hacker"] .map-wrap { box-shadow: 0 0 12px var(--shadow), inset 0 0 18px var(--shadow); }
+/* סמן מהבהב בסוף הכותרת, כמו בטרמינל */
+[data-theme="hacker"] h1::before {
+  content: "root@soc:~#"; color: var(--muted); font-size: .8em;
+  direction: ltr; unicode-bidi: isolate; display: inline-block; margin-left: .5em; /* בלי זה הסימנים מתהפכים בעברית */
+}
+[data-theme="hacker"] h1::after { content: "_"; animation: cursor 1s steps(1) infinite; }
+@keyframes cursor { 50% { opacity: 0; } }
+/* פסי סריקה של מסך CRT ישן */
+[data-theme="hacker"] body::after {
+  content: ""; position: fixed; inset: 0; z-index: 300; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, var(--scanline) 0 1px, transparent 1px 3px);
+}
+
 /* ---------- מצב "הפחתת תנועה": מבטל את כל האנימציות ---------- */
 .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
   animation: none !important; transition: none !important;
@@ -326,6 +369,7 @@ footer.site { border-top: 1px solid var(--border); background: var(--panel); col
 </style>
 </head>
 <body>
+<canvas id="matrix-rain" aria-hidden="true" hidden></canvas>
 <a class="skip-link" href="#log-section">דלג ליומן האירועים</a>
 
 <!-- תג שקיפות: תמיד גלוי בראש המסך -->
@@ -377,7 +421,13 @@ footer.site { border-top: 1px solid var(--border); background: var(--panel); col
     <div class="control-group">
       <button type="button" id="btn-anim" aria-pressed="false">⏸ השהיית אנימציה</button>
       <button type="button" id="btn-motion" aria-pressed="false">הפחתת תנועה</button>
-      <button type="button" id="btn-theme" aria-label="החלפת ערכת נושא">ערכת נושא: אוטומטית</button>
+      <label class="control-label" for="theme-select">ערכת נושא:</label>
+      <select id="theme-select">
+        <option value="auto">אוטומטית (לפי המערכת)</option>
+        <option value="dark">כהה (SOC)</option>
+        <option value="light">בהירה</option>
+        <option value="hacker">💻 האקר</option>
+      </select>
       <button type="button" id="btn-refresh">⟳ רענון נתונים</button>
     </div>
   </section>
@@ -1653,17 +1703,72 @@ async function loadData() {
   refreshView();
 }
 
-/* --- ערכת נושא: אוטומטית ← כהה ← בהירה --- */
-const THEMES = ["auto", "dark", "light"];
-const THEME_LABELS = { auto: "אוטומטית", dark: "כהה", light: "בהירה" };
+/* --- ערכת נושא: אוטומטית / כהה / בהירה / האקר --- */
+const THEMES = ["auto", "dark", "light", "hacker"];
+
+function currentTheme() {
+  return document.documentElement.dataset.theme || "auto";
+}
 
 function applyTheme(theme) {
   if (theme === "auto") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = theme;
-  document.getElementById("btn-theme").textContent = "ערכת נושא: " + THEME_LABELS[theme];
+  document.getElementById("theme-select").value = theme;
   try { localStorage.setItem("ddos-theme", theme); } catch (e) { /* אחסון חסום: לא נורא */ }
   // צבעי מפת החום נקראים מה-CSS, אז צריך לצייר מחדש
   if (state.agg) { renderHeatLegend(); if (mapState.ready) renderChoropleth(); }
+  updateMatrixRain();
+}
+
+/* --- "גשם דיגיטלי" (כמו בסרט המטריקס) לערכת האקר ---
+   על משטח ציור (canvas) יש עמודות של תווים. בכל "פריים" מציירים תו חדש בכל עמודה,
+   ומכסים את כל המשטח בשכבה שחורה כמעט שקופה, כך שתווים ישנים דוהים לאט. */
+const matrixRain = { canvas: null, ctx: null, drops: [], timer: null, fontSize: 16 };
+const RAIN_CHARS = "アカサタナハマヤラワ0123456789ABCDEFאבגדהוזחטיכלמנסעפצקרשת<>/{}#$";
+
+function resizeMatrixRain() {
+  const c = matrixRain.canvas;
+  c.width = window.innerWidth;
+  c.height = window.innerHeight;
+  const columns = Math.ceil(c.width / matrixRain.fontSize);
+  // כל עמודה מתחילה בגובה אקראי, כדי שהגשם לא ייראה כמו קיר אחד
+  matrixRain.drops = Array.from({ length: columns }, () => Math.floor(Math.random() * -50));
+}
+
+function drawMatrixRain() {
+  if (document.hidden) return; // לא מציירים כשהלשונית לא גלויה
+  const { canvas, ctx, drops, fontSize } = matrixRain;
+  const cs = getComputedStyle(document.documentElement);
+  ctx.globalAlpha = 0.08;                          // שכבת דהייה
+  ctx.fillStyle = cs.getPropertyValue("--bg").trim();
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = cs.getPropertyValue("--rain").trim();
+  ctx.font = fontSize + "px monospace";
+  for (let i = 0; i < drops.length; i++) {
+    const ch = RAIN_CHARS[Math.floor(Math.random() * RAIN_CHARS.length)];
+    ctx.fillText(ch, i * fontSize, drops[i] * fontSize);
+    // כשהטיפה יוצאת מהמסך, לפעמים היא מתחילה שוב מלמעלה
+    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  }
+}
+
+function updateMatrixRain() {
+  const on = currentTheme() === "hacker" && !state.reduceMotion;
+  if (!matrixRain.canvas) {
+    matrixRain.canvas = document.getElementById("matrix-rain");
+    matrixRain.ctx = matrixRain.canvas.getContext("2d");
+    window.addEventListener("resize", () => { if (matrixRain.timer) resizeMatrixRain(); });
+  }
+  matrixRain.canvas.hidden = !on;
+  if (on && !matrixRain.timer) {
+    resizeMatrixRain();
+    matrixRain.timer = setInterval(drawMatrixRain, 60);
+  } else if (!on && matrixRain.timer) {
+    clearInterval(matrixRain.timer);
+    matrixRain.timer = null;
+  }
 }
 
 function setReduceMotion(on) {
@@ -1671,6 +1776,7 @@ function setReduceMotion(on) {
   document.documentElement.classList.toggle("reduce-motion", on);
   document.getElementById("btn-motion").setAttribute("aria-pressed", String(on));
   if (on) clearEffects();
+  updateMatrixRain(); // גם הגשם הדיגיטלי נעצר במצב הפחתת תנועה
 }
 
 function wireControls() {
@@ -1712,10 +1818,7 @@ function wireControls() {
   // הפחתת תנועה
   document.getElementById("btn-motion").addEventListener("click", () => setReduceMotion(!state.reduceMotion));
   // ערכת נושא
-  document.getElementById("btn-theme").addEventListener("click", () => {
-    const current = document.documentElement.dataset.theme || "auto";
-    applyTheme(THEMES[(THEMES.indexOf(current) + 1) % THEMES.length]);
-  });
+  document.getElementById("theme-select").addEventListener("change", e => applyTheme(e.target.value));
   // רענון נתונים ידני
   document.getElementById("btn-refresh").addEventListener("click", loadData);
 
@@ -1755,6 +1858,9 @@ async function main() {
   // ערכת נושא שמורה (אם יש)
   let savedTheme = "auto";
   try { savedTheme = localStorage.getItem("ddos-theme") || "auto"; } catch (e) { /* אחסון חסום */ }
+  // אפשר גם לפתוח ישירות בערכה מסוימת דרך הכתובת, למשל: index.html?theme=hacker
+  const themeFromUrl = new URLSearchParams(location.search).get("theme");
+  if (THEMES.includes(themeFromUrl)) savedTheme = themeFromUrl;
   applyTheme(THEMES.includes(savedTheme) ? savedTheme : "auto");
 
   // הפחתת תנועה: ברירת המחדל לפי הגדרות מערכת ההפעלה

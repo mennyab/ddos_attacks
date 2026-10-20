@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מוניטור DDoS גלובלי</title>
+<meta name="description" content="לוח בקרה לימודי בסגנון SOC: דפוסי התקפות DDoS בין מדינות לפי נתונים מצטברים של Cloudflare Radar, עם יומן אירועים מדומה.">
+<style>
+/* =====================================================================
+   עיצוב (CSS)
+   כל הצבעים מוגדרים כמשתנים (CSS variables) כדי שנוכל להחליף ערכת נושא
+   (כהה / בהירה) במקום אחד בלבד.
+   ===================================================================== */
+:root {
+  /* ערכת ברירת מחדל: כהה, בסגנון חדר בקרה (SOC) */
+  --bg: #070b12;
+  --panel: #0d1420;
+  --panel-2: #121b2b;
+  --border: #22314a;
+  --text: #e6edf7;
+  --muted: #9fb0c8;
+  --accent: #38bdf8;
+  --accent-ink: #04121c;
+  --focus: #fbbf24;
+  --ocean: #08111d;
+  --graticule: #12203a;
+  --land: #1a2638;
+  --land-stroke: #2c3d58;
+  /* סקאלת חום רציפה (נמוך ← גבוה) למפת הצבעים */
+  --heat-0: #2a3a58;
+  --heat-1: #5b3a86;
+  --heat-2: #b4357a;
+  --heat-3: #f0643a;
+  --heat-4: #ffd166;
+  /* צבעי חומרה */
+  --sev-low: #4ade80;
+  --sev-medium: #facc15;
+  --sev-high: #fb923c;
+  --sev-critical: #f43f5e;
+  --sev-low-bg: rgba(74, 222, 128, .14);
+  --sev-medium-bg: rgba(250, 204, 21, .14);
+  --sev-high-bg: rgba(251, 146, 60, .16);
+  --sev-critical-bg: rgba(244, 63, 94, .18);
+  --hot: #ff4d6d;
+  --warn: #fde68a;
+  --warn-bg: #3a2c06;
+  --warn-border: #a16207;
+  --demo: #c4b5fd;
+  --demo-bg: #241a45;
+  --real: #7dd3fc;
+  --real-bg: #082638;
+  --sim-bg: #23314a;
+  --sim-text: #b7c6dd;
+  --row-new: rgba(56, 189, 248, .18);
+  --row-hover: #16223a;
+  --tooltip-bg: #0b1220;
+  --shadow: rgba(0, 0, 0, .45);
+}
+
+/* ערכה בהירה: לפי הגדרות מערכת ההפעלה, אלא אם המשתמש בחר "כהה" ידנית */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #eef2f7; --panel: #ffffff; --panel-2: #f6f8fb; --border: #cbd5e1;
+    --text: #0f172a; --muted: #475569; --accent: #0369a1; --accent-ink: #ffffff; --focus: #b45309;
+    --ocean: #e6eef8; --graticule: #d3deeb; --land: #dfe5ed; --land-stroke: #aab7c8;
+    --heat-0: #fde3c8; --heat-1: #fdae6b; --heat-2: #f16913; --heat-3: #c2410c; --heat-4: #7f1d1d;
+    --sev-low: #15803d; --sev-medium: #a16207; --sev-high: #c2410c; --sev-critical: #be123c;
+    --sev-low-bg: #dcfce7; --sev-medium-bg: #fef3c7; --sev-high-bg: #ffedd5; --sev-critical-bg: #ffe4e6;
+    --hot: #be123c; --warn: #713f12; --warn-bg: #fef3c7; --warn-border: #d97706;
+    --demo: #5b21b6; --demo-bg: #ede9fe; --real: #075985; --real-bg: #e0f2fe;
+    --sim-bg: #e2e8f0; --sim-text: #334155; --row-new: rgba(3, 105, 161, .12); --row-hover: #f1f5f9;
+    --tooltip-bg: #ffffff; --shadow: rgba(15, 23, 42, .18);
+  }
+}
+/* ערכה בהירה שנבחרה ידנית (אותם ערכים כמו למעלה) */
+:root[data-theme="light"] {
+  --bg: #eef2f7; --panel: #ffffff; --panel-2: #f6f8fb; --border: #cbd5e1;
+  --text: #0f172a; --muted: #475569; --accent: #0369a1; --accent-ink: #ffffff; --focus: #b45309;
+  --ocean: #e6eef8; --graticule: #d3deeb; --land: #dfe5ed; --land-stroke: #aab7c8;
+  --heat-0: #fde3c8; --heat-1: #fdae6b; --heat-2: #f16913; --heat-3: #c2410c; --heat-4: #7f1d1d;
+  --sev-low: #15803d; --sev-medium: #a16207; --sev-high: #c2410c; --sev-critical: #be123c;
+  --sev-low-bg: #dcfce7; --sev-medium-bg: #fef3c7; --sev-high-bg: #ffedd5; --sev-critical-bg: #ffe4e6;
+  --hot: #be123c; --warn: #713f12; --warn-bg: #fef3c7; --warn-border: #d97706;
+  --demo: #5b21b6; --demo-bg: #ede9fe; --real: #075985; --real-bg: #e0f2fe;
+  --sim-bg: #e2e8f0; --sim-text: #334155; --row-new: rgba(3, 105, 161, .12); --row-hover: #f1f5f9;
+  --tooltip-bg: #ffffff; --shadow: rgba(15, 23, 42, .18);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", "Noto Sans Hebrew", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.mono, code, .log-table td[dir="ltr"], .log-table time { font-family: "Cascadia Mono", Consolas, "Courier New", monospace; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+.skip-link {
+  position: absolute; inset-inline-start: 8px; top: -60px; z-index: 100;
+  background: var(--accent); color: var(--accent-ink); padding: 8px 12px; border-radius: 6px;
+}
+.skip-link:focus { top: 8px; }
+
+/* ---------- תג השקיפות: תמיד גלוי (צמוד לראש המסך) ---------- */
+.badge-bar {
+  position: sticky; top: 0; z-index: 50;
+  padding: 6px 16px; text-align: center; font-size: .85rem; font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  background: var(--real-bg); color: var(--real);
+}
+.badge-bar.is-demo { background: var(--demo-bg); color: var(--demo); }
+
+/* ---------- כותרת עליונה ---------- */
+header.site { border-bottom: 1px solid var(--border); background: var(--panel); }
+.header-inner, main, .footer-inner { max-width: 1440px; margin: 0 auto; padding-inline: 16px; }
+.header-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-dot {
+  width: 12px; height: 12px; border-radius: 50%; background: var(--sev-critical);
+  box-shadow: 0 0 0 4px var(--sev-critical-bg); animation: blink 1.6s ease-in-out infinite;
+}
+@keyframes blink { 50% { opacity: .35; } }
+h1 { font-size: 1.35rem; margin: 0; letter-spacing: .3px; }
+.subtitle { margin: 0; color: var(--muted); font-size: .85rem; }
+.header-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; }
+.header-meta div { display: flex; flex-direction: column; }
+.header-meta dt { color: var(--muted); font-size: .75rem; }
+.header-meta dd { margin: 0; font-weight: 600; font-size: .9rem; }
+#warnings { max-width: 1440px; margin: 0 auto; padding-inline: 16px; }
+.warning {
+  display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
+  margin-block: 8px; padding: 8px 12px; border-radius: 8px;
+  background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); font-size: .9rem;
+}
+.warning button { background: none; border: none; color: inherit; cursor: pointer; font-size: 1.1rem; line-height: 1; }
+
+/* ---------- פקדים ---------- */
+.controls {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  margin-block: 14px; padding: 10px 12px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 10px;
+}
+.control-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.control-label { color: var(--muted); font-size: .85rem; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.segmented button { border: none; border-radius: 0; }
+.segmented button + button { border-inline-start: 1px solid var(--border); }
+button, select, input[type="search"] {
+  font: inherit; font-size: .88rem; color: var(--text); background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; min-height: 34px;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+select { cursor: pointer; }
+
+/* ---------- פריסה ראשית: מפה + לוח צד ---------- */
+.dashboard { display: grid; grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr); gap: 14px; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.panel h2 { font-size: 1rem; margin: 0 0 8px; }
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.panel-head .tag { color: var(--muted); font-size: .8rem; }
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* ---------- המפה ---------- */
+.map-wrap { position: relative; border-radius: 8px; overflow: hidden; background: var(--ocean); border: 1px solid var(--border); }
+#map { display: block; width: 100%; height: auto; }
+.map-status {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  padding: 16px; text-align: center; color: var(--muted);
+}
+.map-status[hidden] { display: none; }
+.graticule { fill: none; stroke: var(--graticule); stroke-width: .5; }
+.country { fill: var(--land); stroke: var(--land-stroke); stroke-width: .5; transition: fill .4s; }
+.country.has-data { cursor: pointer; }
+.country:hover, .country:focus-visible { stroke: var(--accent); stroke-width: 1.2; outline: none; }
+.country.focused { stroke: var(--focus); stroke-width: 1.8; }
+.route-line {
+  fill: none; stroke-linecap: round; opacity: .85; pointer-events: none;
+  stroke-dasharray: 5 7; animation: route-flow 1.4s linear infinite;
+}
+@keyframes route-flow { to { stroke-dashoffset: -24; } }
+.route.tier-low .route-line { stroke: var(--sev-low); }
+.route.tier-medium .route-line { stroke: var(--sev-medium); }
+.route.tier-high .route-line { stroke: var(--sev-high); }
+.route.tier-critical .route-line { stroke: var(--sev-critical); }
+.route-line.flash { stroke: var(--text) !important; opacity: 1; }
+.route-hit { fill: none; stroke: transparent; stroke-width: 10; pointer-events: stroke; cursor: pointer; }
+.route-hit:focus-visible { outline: none; stroke: var(--focus); stroke-opacity: .45; }
+.route { transition: opacity .3s; }
+.route.dim { opacity: .07; }
+.route.dim .route-hit { pointer-events: none; }
+.route.focus .route-line { opacity: 1; }
+.hot-ring {
+  fill: none; stroke: var(--hot); stroke-width: 1.6; pointer-events: none;
+  transform-box: fill-box; transform-origin: center; animation: hot-pulse 2s ease-out infinite;
+}
+.hot-core { fill: var(--hot); pointer-events: none; }
+@keyframes hot-pulse { from { transform: scale(.6); opacity: 1; } to { transform: scale(2.8); opacity: 0; } }
+.fx { pointer-events: none; }
+.projectile { stroke: var(--bg); stroke-width: .6; }
+.projectile.sev-low, .pulse.sev-low { fill: var(--sev-low); stroke: var(--sev-low); }
+.projectile.sev-medium, .pulse.sev-medium { fill: var(--sev-medium); stroke: var(--sev-medium); }
+.projectile.sev-high, .pulse.sev-high { fill: var(--sev-high); stroke: var(--sev-high); }
+.projectile.sev-critical, .pulse.sev-critical { fill: var(--sev-critical); stroke: var(--sev-critical); }
+.pulse { fill-opacity: .15; stroke-width: 1.5; }
+/* עצירת אנימציה */
+.map-wrap.paused .route-line, .map-wrap.paused .hot-ring { animation-play-state: paused; }
+
+/* ---------- מקראות ---------- */
+.legends { display: flex; flex-wrap: wrap; gap: 10px 28px; margin-top: 10px; font-size: .82rem; color: var(--muted); }
+.legend-title { display: block; margin-bottom: 4px; }
+.heat-bar { width: 220px; max-width: 60vw; height: 10px; border-radius: 4px; border: 1px solid var(--border); }
+.heat-labels { display: flex; justify-content: space-between; width: 220px; max-width: 60vw; }
+.route-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; list-style: none; padding: 0; margin: 0; }
+.route-legend li { display: flex; align-items: center; gap: 5px; }
+.swatch { display: inline-block; width: 22px; height: 4px; border-radius: 2px; }
+.swatch.low { background: var(--sev-low); }
+.swatch.medium { background: var(--sev-medium); }
+.swatch.high { background: var(--sev-high); }
+.swatch.critical { background: var(--sev-critical); }
+.swatch.hot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--hot); background: none; }
+
+/* ---------- רשימות Top 5 ---------- */
+.toplist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.top-item {
+  width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; text-align: start;
+  background: transparent; border: 1px solid transparent; padding: 5px 6px;
+}
+.top-item:hover { background: var(--panel-2); }
+.top-item .val { font-weight: 700; font-variant-numeric: tabular-nums; }
+.bar { grid-column: 1 / -1; height: 5px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.bar span { display: block; height: 100%; border-radius: 3px; }
+.bar.targets span { background: var(--sev-critical); }
+.bar.origins span { background: var(--accent); }
+.hint { color: var(--muted); font-size: .8rem; margin: 0 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.chip {
+  border: 1px solid var(--hot); color: var(--hot); background: transparent;
+  border-radius: 999px; padding: 2px 10px; font-size: .82rem; min-height: 28px;
+}
+
+/* ---------- אודות הנתונים ---------- */
+.about { margin-block: 14px; }
+.about summary { cursor: pointer; font-weight: 700; font-size: 1rem; }
+.about-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 6px 22px; margin-top: 8px; }
+.about h3 { font-size: .95rem; margin: 10px 0 2px; color: var(--accent); }
+.about p { margin: 0 0 6px; }
+
+/* ---------- יומן האירועים ---------- */
+.log-panel { margin-bottom: 14px; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.stat-label { color: var(--muted); font-size: .78rem; display: block; }
+.stat-value { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.log-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.log-controls label { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: .85rem; }
+.log-controls input[type="search"] { min-width: 180px; }
+.log-status { color: var(--muted); font-size: .82rem; margin: 0 0 6px; }
+.table-scroll { overflow: auto; max-height: 440px; border: 1px solid var(--border); border-radius: 8px; }
+.log-table { width: 100%; min-width: 1180px; border-collapse: collapse; font-size: .8rem; }
+.log-table caption { text-align: start; padding: 6px 8px; color: var(--muted); font-size: .8rem; caption-side: top; }
+.log-table th {
+  position: sticky; top: 0; z-index: 1; background: var(--panel-2); color: var(--muted);
+  text-align: start; font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.log-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+.log-table tbody tr:hover { background: var(--row-hover); }
+.log-table tr.new { animation: row-in 1.2s ease-out; }
+@keyframes row-in { from { background: var(--row-new); } to { background: transparent; } }
+.sim-tag {
+  display: inline-block; font-size: .65rem; font-weight: 700; letter-spacing: .5px;
+  padding: 0 4px; border-radius: 3px; background: var(--sim-bg); color: var(--sim-text); margin-inline-end: 4px;
+  font-family: "Segoe UI", Arial, sans-serif; vertical-align: middle;
+}
+.sev {
+  display: inline-block; min-width: 64px; text-align: center; font-weight: 700;
+  padding: 1px 8px; border-radius: 4px; border: 1px solid currentColor;
+}
+.sev.low { color: var(--sev-low); background: var(--sev-low-bg); }
+.sev.medium { color: var(--sev-medium); background: var(--sev-medium-bg); }
+.sev.high { color: var(--sev-high); background: var(--sev-high-bg); }
+.sev.critical { color: var(--sev-critical); background: var(--sev-critical-bg); }
+.empty-row td { text-align: center; color: var(--muted); padding: 18px; }
+
+/* ---------- חלונית מידע (Tooltip) ---------- */
+.tooltip {
+  position: fixed; z-index: 200; max-width: 300px; pointer-events: none;
+  background: var(--tooltip-bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: .82rem; box-shadow: 0 8px 24px var(--shadow);
+}
+.tooltip strong { font-size: .92rem; }
+.tooltip .tt-row { display: flex; justify-content: space-between; gap: 12px; }
+.tooltip .tt-muted { color: var(--muted); }
+.tooltip ul { margin: 2px 0 4px; padding-inline-start: 16px; }
+
+/* ---------- כותרת תחתונה ---------- */
+footer.site { border-top: 1px solid var(--border); background: var(--panel); color: var(--muted); font-size: .85rem; }
+.footer-inner { display: flex; flex-wrap: wrap; gap: 6px 24px; justify-content: space-between; padding-block: 12px; }
+
+/* ---------- מצב "הפחתת תנועה": מבטל את כל האנימציות ---------- */
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+  animation: none !important; transition: none !important;
+}
+.reduce-motion .hot-ring { transform: scale(1.6); opacity: .9; }
+
+/* ---------- מסכים צרים (טלפון / טאבלט) ---------- */
+@media (max-width: 960px) {
+  .dashboard { grid-template-columns: 1fr; }
+  .side { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+}
+@media (max-width: 640px) {
+  body { font-size: 14px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .controls { gap: 8px 12px; }
+  .log-controls input[type="search"] { min-width: 0; flex: 1 1 100%; }
+  .table-scroll { max-height: 360px; }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#log-section">דלג ליומן האירועים</a>
+
+<!-- תג שקיפות: תמיד גלוי בראש המסך -->
+<div id="honesty-badge" class="badge-bar is-demo" role="note" aria-label="מקור הנתונים">
+  טוען נתונים…
+</div>
+
+<header class="site">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-dot" aria-hidden="true"></span>
+      <div>
+        <h1>מוניטור התקפות DDoS גלובלי</h1>
+        <p class="subtitle">לוח בקרה לימודי בסגנון SOC · מגמת מערכות תקשוב</p>
+      </div>
+    </div>
+    <dl class="header-meta">
+      <div><dt>מצב נתונים</dt><dd id="meta-mode">—</dd></div>
+      <div><dt>עדכון נתונים אחרון</dt><dd id="meta-updated">—</dd></div>
+      <div><dt>חלון זמן</dt><dd id="meta-window">—</dd></div>
+    </dl>
+  </div>
+</header>
+<div id="warnings" role="status" aria-live="polite"></div>
+
+<main>
+  <!-- ===== פקדי המפה ===== -->
+  <section class="controls" aria-label="פקדי תצוגה">
+    <div class="control-group" role="group" aria-labelledby="lbl-layer">
+      <span class="control-label" id="lbl-layer">שכבה:</span>
+      <div class="segmented">
+        <button type="button" id="btn-layer-L3" data-layer="L3" aria-pressed="false">L3/4 · רשת</button>
+        <button type="button" id="btn-layer-L7" data-layer="L7" aria-pressed="false">L7 · יישום</button>
+      </div>
+    </div>
+    <div class="control-group" role="group" aria-labelledby="lbl-heat">
+      <span class="control-label" id="lbl-heat">מפת חום לפי:</span>
+      <div class="segmented">
+        <button type="button" data-heat="target" aria-pressed="true">מדינות יעד</button>
+        <button type="button" data-heat="origin" aria-pressed="false">מדינות מקור</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <label class="control-label" for="focus-select">מיקוד במדינה:</label>
+      <select id="focus-select" aria-label="הצג רק נתיבים של מדינה מסוימת">
+        <option value="">כל המדינות</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <button type="button" id="btn-anim" aria-pressed="false">⏸ השהיית אנימציה</button>
+      <button type="button" id="btn-motion" aria-pressed="false">הפחתת תנועה</button>
+      <button type="button" id="btn-theme" aria-label="החלפת ערכת נושא">ערכת נושא: אוטומטית</button>
+      <button type="button" id="btn-refresh">⟳ רענון נתונים</button>
+    </div>
+  </section>
+
+  <div class="dashboard">
+    <!-- ===== המפה ===== -->
+    <section class="panel" aria-labelledby="map-title">
+      <div class="panel-head">
+        <h2 id="map-title">מפת התקפות</h2>
+        <span class="tag" id="map-layer-label"></span>
+      </div>
+      <div class="map-wrap" id="map-wrap">
+        <svg id="map" viewBox="0 0 960 500" role="group" aria-labelledby="map-title" aria-describedby="map-desc">
+          <desc id="map-desc">מפת עולם: צבע המדינה מראה את חלקה בהתקפות, קווים מעוקלים מראים נתיבי התקפה ממדינת מקור למדינת יעד, וטבעות פועמות מסמנות אזורים חמים. אפשר לנווט במקלדת בין מדינות ונתיבים.</desc>
+        </svg>
+        <div class="map-status" id="map-status">טוען מפת עולם…</div>
+      </div>
+      <div class="legends">
+        <div>
+          <span class="legend-title" id="heat-legend-title">חלק מההתקפות הנכנסות</span>
+          <div class="heat-bar" id="heat-bar" aria-hidden="true"></div>
+          <div class="heat-labels"><span id="heat-min">0%</span><span id="heat-max">—</span></div>
+        </div>
+        <div>
+          <span class="legend-title">נתיבי התקפה (חלק הזוג מכלל ההתקפות):</span>
+          <ul class="route-legend" id="route-legend"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== לוח צד ===== -->
+    <aside class="side" aria-label="סיכומים">
+      <section class="panel" aria-labelledby="h-top-targets">
+        <h2 id="h-top-targets">Top 5 · המדינות המותקפות ביותר</h2>
+        <ol class="toplist" id="top-targets"></ol>
+      </section>
+      <section class="panel" aria-labelledby="h-top-origins">
+        <h2 id="h-top-origins">Top 5 · מדינות מקור</h2>
+        <ol class="toplist" id="top-origins"></ol>
+      </section>
+      <section class="panel" aria-labelledby="h-hot">
+        <h2 id="h-hot">אזורים חמים</h2>
+        <p class="hint" id="hot-hint"></p>
+        <ul class="chips" id="hot-zones"></ul>
+      </section>
+    </aside>
+  </div>
+
+  <!-- ===== אודות הנתונים ===== -->
+  <details class="panel about" id="about">
+    <summary>ℹ️ אודות הנתונים: חשוב לקרוא לפני שמסיקים מסקנות</summary>
+    <div class="about-grid">
+      <div>
+        <h3>מה זה DDoS?</h3>
+        <p>מתקפת מניעת שירות מבוזרת (Distributed Denial of Service): הרבה מחשבים (לרוב מכשירים פרוצים שמרכיבים "בוטנט") שולחים יחד כמות עצומה של תעבורה או בקשות לשרת, כדי להעמיס עליו עד שמשתמשים אמיתיים לא מצליחים לקבל שירות.</p>
+        <h3>שתי שכבות</h3>
+        <p><strong>L3/4 (רשת)</strong>: הצפה של חבילות כמו UDP, SYN או הגברת DNS. נמדדת ב-Gbps (נפח) וב-Mpps (חבילות בשנייה).
+        <strong>L7 (יישום)</strong>: הצפה של בקשות HTTP לאתר. נמדדת בבקשות לשנייה (rps).</p>
+      </div>
+      <div>
+        <h3>מה מראה המפה?</h3>
+        <p>המפה מבוססת על נתונים <strong>מצטברים</strong> של Cloudflare Radar: אחוז ההתקפות לכל זוג "מדינת מקור → מדינת יעד" בחלון זמן (למשל 24 שעות). אין בנתונים התקפות בודדות, שעות מדויקות או כתובות IP של תוקפים.</p>
+        <p>החלק של מדינה מחושב כסכום הזוגות שמופיעים ב-Top 25, ולכן הוא <strong>הערכת חסר</strong>: התקפות מחוץ לרשימה לא נספרות.</p>
+      </div>
+      <div>
+        <h3>"מקור" ב-L3/4 הוא לא מקום התוקף</h3>
+        <p>בהתקפות רשת קל לזייף את כתובת המקור (IP Spoofing). לכן Cloudflare מגדירה את ה"מקור" כ<strong>מיקום מרכז הנתונים של Cloudflare שקלט את התעבורה</strong>, ולא לפי כתובת ה-IP. ב-L7 נדרש חיבור TCP אמיתי, אז המקור נקבע לפי כתובת ה-IP, אבל זו בדרך כלל כתובת של מחשב פרוץ או של שרת מתווך (Proxy), ולא של התוקף עצמו.</p>
+      </div>
+      <div>
+        <h3>נקודת מבט של ספק אחד</h3>
+        <p>הנתונים משקפים רק את מה ש-Cloudflare רואה ברשת שלה. ספקים אחרים רואים תמונה אחרת. זה מדגם, לא "כל האינטרנט".</p>
+        <h3>מדינת מקור ≠ תוקף</h3>
+        <p>זה שהתקפה "מגיעה" ממדינה מסוימת <strong>לא אומר</strong> שהמדינה, הממשלה שלה או התושבים שלה הם התוקפים. רוב התעבורה מגיעה ממכשירים פרוצים, משרתים בענן או מתעבורה מזויפת.</p>
+      </div>
+      <div>
+        <h3>מה מדומה כאן?</h3>
+        <p>יומן האירועים בתחתית הדף הוא <strong>סימולציה</strong>: כל אירוע נוצר באקראי, אבל זוגות המדינות נבחרים לפי האחוזים האמיתיים (או אחוזי הדוגמה), ולכן ההתפלגות דומה למציאות. כל שורה מסומנת בתג <span class="sim-tag">SIM</span>.</p>
+        <p>כתובות ה-IP המדומות לקוחות רק מהטווחים השמורים לתיעוד (RFC 5737): <code dir="ltr">192.0.2.0/24</code>, <code dir="ltr">198.51.100.0/24</code>, <code dir="ltr">203.0.113.0/24</code>. אף כתובת ביומן לא שייכת למחשב אמיתי.</p>
+      </div>
+    </div>
+  </details>
+
+  <!-- ===== יומן אירועים ===== -->
+  <section class="panel log-panel" id="log-section" aria-labelledby="log-title">
+    <div class="panel-head">
+      <h2 id="log-title"><span class="sim-tag">SIM</span> יומן אירועים חי (מדומה)</h2>
+      <span class="tag">משוקלל לפי נתוני השכבה שנבחרה</span>
+    </div>
+
+    <div class="stats" aria-label="מדדי יומן">
+      <div class="stat"><span class="stat-label">אירועים בדקה האחרונה</span><span class="stat-value" id="stat-minute">0</span></div>
+      <div class="stat"><span class="stat-label">סה״כ אירועים</span><span class="stat-value" id="stat-total">0</span></div>
+      <div class="stat"><span class="stat-label" id="stat-peak-label">שיא נוכחי (דקה אחרונה)</span><span class="stat-value" id="stat-peak" dir="ltr">—</span></div>
+      <div class="stat"><span class="stat-label">היעד המותקף ביותר (5 דק׳)</span><span class="stat-value" id="stat-top-target">—</span></div>
+    </div>
+
+    <div class="log-controls" role="group" aria-label="פקדי יומן">
+      <button type="button" id="btn-log-pause" aria-pressed="false">⏸ השהיית יומן</button>
+      <label>חומרה
+        <select id="filter-severity">
+          <option value="">הכול</option>
+          <option value="low">נמוכה</option>
+          <option value="medium">בינונית</option>
+          <option value="high">גבוהה</option>
+          <option value="critical">קריטית</option>
+        </select>
+      </label>
+      <label>שכבה
+        <select id="filter-layer">
+          <option value="">הכול</option>
+          <option value="L3">L3/4</option>
+          <option value="L7">L7</option>
+        </select>
+      </label>
+      <label>מדינה
+        <select id="filter-country"><option value="">הכול</option></select>
+      </label>
+      <input type="search" id="filter-text" placeholder="חיפוש חופשי (וקטור, IP, מזהה…)" aria-label="חיפוש ביומן">
+      <button type="button" id="btn-log-clear">🗑 ניקוי</button>
+      <button type="button" id="btn-export">⬇ ייצוא CSV</button>
+    </div>
+    <p class="log-status" id="log-status" aria-live="polite"></p>
+
+    <div class="table-scroll" tabindex="0" aria-label="טבלת יומן אירועים, ניתנת לגלילה">
+      <table class="log-table" id="log-table">
+        <caption>כל השורות בטבלה הן אירועים מדומים (SIM) לצורכי לימוד. כתובות IP מטווחי תיעוד בלבד (RFC 5737).</caption>
+        <thead>
+          <tr>
+            <th scope="col">זמן (UTC)</th>
+            <th scope="col">מזהה</th>
+            <th scope="col">שכבה</th>
+            <th scope="col">וקטור תקיפה</th>
+            <th scope="col">מקור</th>
+            <th scope="col">יעד</th>
+            <th scope="col">IP מקור (מדומה)</th>
+            <th scope="col">פרוטוקול / פורט</th>
+            <th scope="col">עוצמת שיא</th>
+            <th scope="col">משך</th>
+            <th scope="col">חומרה</th>
+          </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="footer-inner">
+    <span>נתונים: <a href="https://radar.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Radar</a> (<a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener">CC BY-NC 4.0</a>) · <span lang="en" dir="ltr">Data: Cloudflare Radar (CC BY-NC 4.0)</span></span>
+    <span>סימולציה לימודית · <span lang="en" dir="ltr">Educational simulation</span> · מפה: Natural Earth דרך world-atlas</span>
+  </div>
+</footer>
+
+<div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+
+<!-- ספריות חיצוניות בגרסאות מדויקות (pinned), כדי שעדכון עתידי לא ישבור את הדף -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+
+<script>
+"use strict";
+
+/* =====================================================================
+   1. CONFIG: הגדרות. זה המקום היחיד שצריך לשנות כדי להתאים את הדף.
+   ===================================================================== */
+const CONFIG = {
+  // מצב נתונים:
+  //   "demo"     - נתוני דוגמה מובנים בקוד. עובד גם בפתיחה ישירה של הקובץ, בלי שרת.
+  //   "snapshot" - קריאת הקובץ המקומי data/attacks.json (דורש שרת מקומי, ראו README).
+  //   "live"     - משיכה בזמן אמת דרך שרת מתווך (Proxy) שמוגדר ב-PROXY_URL.
+  DATA_MODE: "demo",
+
+  // כתובת השרת המתווך (למשל Cloudflare Worker), לדוגמה: "https://radar-proxy.example.workers.dev"
+  //
+  // ⚠️ לעולם לא שמים כאן מפתח API (Token)!
+  // כל מה שנמצא בקוד JavaScript בצד הלקוח הוא ציבורי: כל מי שפותח את הדף יכול
+  // ללחוץ F12 ולקרוא אותו. לכן המפתח נשמר רק בשרת המתווך (כ-Secret), והשרת
+  // מוסיף אותו לבקשה ל-Cloudflare. הדפדפן אף פעם לא רואה את המפתח.
+  PROXY_URL: "",
+
+  // הנתיבים ב-API של Cloudflare Radar שהשרת המתווך מעביר הלאה
+  RADAR_PATHS: {
+    L3: "/radar/attacks/layer3/top/attacks?limit=25&dateRange=1d&format=json",
+    L7: "/radar/attacks/layer7/top/attacks?limit=25&dateRange=1d&format=json",
+  },
+
+  SNAPSHOT_URL: "data/attacks.json", // הקובץ המקומי למצב snapshot
+  FETCH_TIMEOUT_MS: 10000,           // כמה זמן לחכות לתשובה מהרשת לפני שמוותרים
+
+  DATA_REFRESH_MINUTES: 15,  // כל כמה דקות לטעון נתונים מחדש (snapshot / live)
+  EVENTS_PER_MINUTE: 40,     // קצב ממוצע של אירועים מדומים ביומן
+  MAX_LOG_ROWS: 200,         // מספר השורות המרבי בטבלת היומן
+  DEFAULT_LAYER: "L7",       // "L3" (רשת) או "L7" (יישום)
+
+  HOTZONE_THRESHOLD_PERCENT: 8,                    // מעל איזה אחוז התקפות נכנסות מדינה נחשבת "אזור חם"
+  ROUTE_TIERS: { medium: 1.5, high: 3, critical: 6 }, // ספי אחוז לצבע ועובי של נתיב
+  SEVERITY_L3_GBPS: { medium: 10, high: 100, critical: 500 },          // חומרה לפי Gbps (L3/4)
+  SEVERITY_L7_RPS: { medium: 50000, high: 500000, critical: 5000000 }, // חומרה לפי בקשות לשנייה (L7)
+  MAX_PROJECTILES: 25,       // מספר מרבי של "קליעים" מונפשים על המפה בו-זמנית
+
+  WORLD_ATLAS_URL: "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json",
+};
+
+/* =====================================================================
+   2. DATA: טבלת מדינות, נתוני דוגמה, טעינה ופענוח נתונים
+   ===================================================================== */
+
+/* --- 2.1 טבלת מדינות ---
+   מפת העולם (world-atlas) מזהה מדינות לפי קוד מספרי (ISO 3166-1 numeric, למשל 376 = ישראל),
+   ואילו Cloudflare Radar משתמש בקוד בן שתי אותיות (alpha-2, למשל IL).
+   הטבלה הזו מחברת ביניהם, ומוסיפה שם בעברית ונקודת מרכז (קו רוחב/אורך) לציור הנתיבים.
+   כדי להוסיף מדינה: מוסיפים שורה בפורמט [alpha2, numeric, "English", "עברית", lat, lon].
+   מחפשים את הקוד המספרי ונקודת המרכז בוויקיפדיה (ISO 3166-1). */
+const COUNTRY_TABLE = [
+  // alpha2, numeric, English name,          Hebrew name,         lat,    lon
+  ["US", "840", "United States",        "ארצות הברית",       39.8,  -98.6],
+  ["CA", "124", "Canada",               "קנדה",              56.1, -106.3],
+  ["MX", "484", "Mexico",               "מקסיקו",            23.6, -102.5],
+  ["BR", "076", "Brazil",               "ברזיל",            -10.8,  -52.9],
+  ["AR", "032", "Argentina",            "ארגנטינה",         -34.0,  -64.0],
+  ["CL", "152", "Chile",                "צ'ילה",            -35.7,  -71.5],
+  ["CO", "170", "Colombia",             "קולומביה",           4.6,  -74.3],
+  ["GB", "826", "United Kingdom",       "בריטניה",           54.0,   -2.0],
+  ["FR", "250", "France",               "צרפת",              46.6,    2.4],
+  ["DE", "276", "Germany",              "גרמניה",            51.2,   10.4],
+  ["NL", "528", "Netherlands",          "הולנד",             52.2,    5.5],
+  ["IT", "380", "Italy",                "איטליה",            42.8,   12.6],
+  ["ES", "724", "Spain",                "ספרד",              40.2,   -3.6],
+  ["PL", "616", "Poland",               "פולין",             52.1,   19.4],
+  ["SE", "752", "Sweden",               "שוודיה",            62.0,   15.0],
+  ["FI", "246", "Finland",              "פינלנד",            64.0,   26.0],
+  ["CH", "756", "Switzerland",          "שווייץ",            46.8,    8.2],
+  ["AT", "040", "Austria",              "אוסטריה",           47.6,   14.1],
+  ["CZ", "203", "Czechia",              "צ'כיה",             49.8,   15.5],
+  ["RO", "642", "Romania",              "רומניה",            45.9,   24.9],
+  ["BG", "100", "Bulgaria",             "בולגריה",           42.7,   25.5],
+  ["LT", "440", "Lithuania",            "ליטא",              55.2,   23.9],
+  ["UA", "804", "Ukraine",              "אוקראינה",          49.0,   31.4],
+  ["BY", "112", "Belarus",              "בלארוס",            53.7,   28.0],
+  ["RU", "643", "Russia",               "רוסיה",             60.0,   90.0],
+  ["TR", "792", "Türkiye",              "טורקיה",            39.0,   35.2],
+  ["IL", "376", "Israel",               "ישראל",             31.4,   35.0],
+  ["JO", "400", "Jordan",               "ירדן",              31.2,   36.5],
+  ["EG", "818", "Egypt",                "מצרים",             26.8,   30.8],
+  ["SA", "682", "Saudi Arabia",         "ערב הסעודית",       23.9,   45.1],
+  ["AE", "784", "United Arab Emirates", "איחוד האמירויות",   23.4,   53.8],
+  ["IR", "364", "Iran",                 "איראן",             32.4,   53.7],
+  ["PK", "586", "Pakistan",             "פקיסטן",            30.4,   69.3],
+  ["IN", "356", "India",                "הודו",              22.0,   79.0],
+  ["BD", "050", "Bangladesh",           "בנגלדש",            23.7,   90.4],
+  ["CN", "156", "China",                "סין",               35.9,  104.2],
+  ["HK", "344", "Hong Kong",            "הונג קונג",         22.3,  114.2],
+  ["TW", "158", "Taiwan",               "טייוואן",           23.7,  121.0],
+  ["JP", "392", "Japan",                "יפן",               36.2,  138.3],
+  ["KR", "410", "South Korea",          "דרום קוריאה",       36.5,  127.9],
+  ["VN", "704", "Vietnam",              "וייטנאם",           14.1,  108.3],
+  ["TH", "764", "Thailand",             "תאילנד",            15.9,  100.9],
+  ["MY", "458", "Malaysia",             "מלזיה",              4.2,  102.0],
+  ["SG", "702", "Singapore",            "סינגפור",            1.35, 103.8],
+  ["ID", "360", "Indonesia",            "אינדונזיה",         -2.5,  118.0],
+  ["PH", "608", "Philippines",          "הפיליפינים",        12.9,  121.8],
+  ["AU", "036", "Australia",            "אוסטרליה",         -25.3,  133.8],
+  ["NZ", "554", "New Zealand",          "ניו זילנד",        -41.0,  174.0],
+  ["ZA", "710", "South Africa",         "דרום אפריקה",      -30.6,   22.9],
+  ["NG", "566", "Nigeria",              "ניגריה",             9.1,    8.7],
+  ["KE", "404", "Kenya",                "קניה",               0.0,   37.9],
+  ["MA", "504", "Morocco",              "מרוקו",             31.8,   -7.1],
+  ["KZ", "398", "Kazakhstan",           "קזחסטן",            48.0,   67.0],
+];
+
+// הופכים את הטבלה לאובייקטים, ובונים שני "מילונים" לחיפוש מהיר: לפי alpha-2 ולפי קוד מספרי
+const COUNTRIES = COUNTRY_TABLE.map(([a2, numeric, en, he, lat, lon]) => ({ a2, numeric, en, he, lat, lon }));
+const COUNTRY_BY_A2 = new Map(COUNTRIES.map(c => [c.a2, c]));
+const COUNTRY_BY_NUMERIC = new Map(COUNTRIES.map(c => [Number(c.numeric), c]));
+
+/* --- 2.2 נתוני דוגמה (מצב demo) ---
+   ⚠️ אלה נתונים מומצאים שנראים סבירים. הם לא נמדדו!
+   כל שורה: [מדינת מקור, מדינת יעד, אחוז מכלל ההתקפות].
+   נבנה מהם תשובה באותו מבנה בדיוק כמו של Cloudflare Radar, כדי שכל המצבים
+   יעברו דרך אותה פונקציית פענוח. */
+const DEMO_PAIRS = {
+  L3: [
+    ["US", "CN", 9.8], ["DE", "US", 7.1], ["CN", "US", 6.4], ["BR", "BR", 5.2], ["US", "US", 4.9],
+    ["NL", "DE", 4.1], ["SG", "CN", 3.8], ["RU", "UA", 3.5], ["VN", "US", 3.2], ["IN", "IN", 3.0],
+    ["HK", "CN", 2.9], ["GB", "US", 2.6], ["FR", "DE", 2.4], ["ID", "SG", 2.2], ["KR", "JP", 2.0],
+    ["US", "DE", 1.9], ["TR", "IL", 1.8], ["JP", "US", 1.7], ["DE", "IL", 1.5], ["UA", "RU", 1.4],
+    ["CA", "US", 1.3], ["NL", "IL", 1.2], ["SG", "IN", 1.1], ["AU", "AU", 1.0], ["ZA", "ZA", 0.9],
+  ],
+  L7: [
+    ["US", "US", 11.5], ["ID", "US", 7.8], ["DE", "DE", 5.6], ["CN", "US", 5.1], ["SG", "CN", 4.6],
+    ["US", "IL", 4.2], ["RU", "UA", 3.9], ["BR", "US", 3.4], ["NL", "GB", 3.1], ["IN", "US", 2.9],
+    ["VN", "DE", 2.6], ["FR", "FR", 2.3], ["US", "GB", 2.1], ["ID", "IL", 2.0], ["HK", "SG", 1.9],
+    ["TR", "US", 1.7], ["KR", "KR", 1.6], ["IR", "IL", 1.5], ["DE", "US", 1.4], ["MX", "US", 1.3],
+    ["CA", "CA", 1.2], ["UA", "RU", 1.1], ["JP", "JP", 1.0], ["PL", "UA", 0.9], ["GB", "IL", 0.8],
+  ],
+};
+
+// בונה אובייקט שנראה בדיוק כמו תשובה של Radar API
+function makeRadarResponse(rows) {
+  return {
+    success: true,
+    result: {
+      meta: {},
+      top_0: rows.map(([origin, target, value], i) => ({
+        originCountryAlpha2: origin,
+        originCountryName: COUNTRY_BY_A2.get(origin)?.en || origin,
+        targetCountryAlpha2: target,
+        targetCountryName: COUNTRY_BY_A2.get(target)?.en || target,
+        value: String(value), // ב-Radar האחוז מגיע כמחרוזת טקסט
+        rank: i + 1,
+      })),
+    },
+  };
+}
+
+/* --- 2.3 פענוח זהיר (defensive parsing) של תשובת Radar ---
+   לא סומכים על נתונים שמגיעים מהרשת: בודקים כל שדה, ומדלגים על שורות לא תקינות. */
+function parseRadarResponse(json) {
+  if (!json || typeof json !== "object") throw new Error("התשובה אינה JSON תקין");
+  if (json.success === false) {
+    const msg = Array.isArray(json.errors) && json.errors[0]?.message;
+    throw new Error("ה-API החזיר שגיאה" + (msg ? ": " + msg : ""));
+  }
+  const result = json.result;
+  if (!result || typeof result !== "object") throw new Error("חסר השדה result");
+
+  // בדרך כלל השורות נמצאות ב-result.top_0; אם לא, לוקחים את המערך הראשון שנמצא
+  const rows = Array.isArray(result.top_0) ? result.top_0 : Object.values(result).find(Array.isArray);
+  if (!rows) throw new Error("לא נמצא מערך שורות בתשובה");
+
+  const pairs = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const origin = String(row.originCountryAlpha2 ?? "").trim().toUpperCase();
+    const target = String(row.targetCountryAlpha2 ?? "").trim().toUpperCase();
+    const value = parseFloat(row.value);
+    if (!/^[A-Z]{2}$/.test(origin) || !/^[A-Z]{2}$/.test(target)) continue; // קוד מדינה לא תקין
+    if (!Number.isFinite(value) || value <= 0 || value > 100) continue;      // אחוז לא הגיוני
+    pairs.push({
+      origin, target, value,
+      originName: cleanName(row.originCountryName, origin),
+      targetName: cleanName(row.targetCountryName, target),
+      rank: Number.isFinite(Number(row.rank)) ? Number(row.rank) : pairs.length + 1,
+    });
+  }
+  if (pairs.length === 0) throw new Error("אין שורות תקינות בנתונים");
+  pairs.sort((a, b) => b.value - a.value);
+
+  // חלון הזמן (אם קיים) נמצא ב-result.meta.dateRange[0]
+  const range = Array.isArray(result.meta?.dateRange) ? result.meta.dateRange[0] : null;
+  const window = range && range.startTime && range.endTime
+    ? { start: new Date(range.startTime), end: new Date(range.endTime) } : null;
+  return { pairs, window };
+}
+
+function cleanName(name, fallback) {
+  return typeof name === "string" && name.trim() ? name.trim().slice(0, 60) : fallback;
+}
+
+/* --- 2.4 טעינת נתונים לפי המצב שנבחר --- */
+
+// fetch עם הגבלת זמן: אם השרת לא עונה תוך FETCH_TIMEOUT_MS, מבטלים
+async function fetchJson(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CONFIG.FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { signal: controller.signal, cache: "no-store" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    return await response.json();
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("תם הזמן להמתנה לתשובה");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// מחזיר "מאגר נתונים" אחיד: { L3: [...זוגות], L7: [...זוגות], isSample, window, ... }
+function buildDataset(l3Json, l7Json, info) {
+  const l3 = parseRadarResponse(l3Json);
+  const l7 = parseRadarResponse(l7Json);
+  return { L3: l3.pairs, L7: l7.pairs, window: l7.window || l3.window, loadedAt: new Date(), ...info };
+}
+
+function loadDemoDataset(info = {}) {
+  return buildDataset(makeRadarResponse(DEMO_PAIRS.L3), makeRadarResponse(DEMO_PAIRS.L7),
+    { mode: "demo", isSample: true, ...info });
+}
+
+async function loadSnapshotDataset() {
+  const json = await fetchJson(CONFIG.SNAPSHOT_URL);
+  // מבנה הקובץ: { meta: {...}, layer3: <תשובת Radar>, layer7: <תשובת Radar> }
+  // אם בקובץ כתוב meta.isSample = true, הוא קובץ דוגמה והתג יציין זאת.
+  return buildDataset(json.layer3, json.layer7, { mode: "snapshot", isSample: json.meta?.isSample === true });
+}
+
+async function loadLiveDataset() {
+  if (!CONFIG.PROXY_URL) throw new Error("לא הוגדרה כתובת PROXY_URL");
+  const base = CONFIG.PROXY_URL.replace(/\/+$/, "");
+  const [l3, l7] = await Promise.all([
+    fetchJson(base + CONFIG.RADAR_PATHS.L3),
+    fetchJson(base + CONFIG.RADAR_PATHS.L7),
+  ]);
+  return buildDataset(l3, l7, { mode: "live", isSample: false });
+}
+
+/* --- 2.5 חישובים על הנתונים --- */
+
+// סוכם, לכל מדינה, את האחוזים שלה כיעד וכמקור
+function aggregate(pairs) {
+  const asTarget = new Map();
+  const asOrigin = new Map();
+  for (const p of pairs) {
+    asTarget.set(p.target, (asTarget.get(p.target) || 0) + p.value);
+    asOrigin.set(p.origin, (asOrigin.get(p.origin) || 0) + p.value);
+  }
+  const maxPair = Math.max(...pairs.map(p => p.value));
+  return { asTarget, asOrigin, maxPair };
+}
+
+// השותפים המובילים של מדינה: מי תוקף אותה (role="attackers") או את מי היא "תוקפת" (role="targets")
+function topPartners(a2, role, n = 3) {
+  const pairs = currentPairs();
+  const list = role === "attackers"
+    ? pairs.filter(p => p.target === a2).map(p => ({ a2: p.origin, value: p.value }))
+    : pairs.filter(p => p.origin === a2).map(p => ({ a2: p.target, value: p.value }));
+  return list.sort((a, b) => b.value - a.value).slice(0, n);
+}
+
+/* =====================================================================
+   מצב גלובלי של האפליקציה (state): כל מה שהמשתמש בחר ומה שנטען
+   ===================================================================== */
+const state = {
+  dataset: null,               // הנתונים שנטענו
+  layer: CONFIG.DEFAULT_LAYER, // "L3" או "L7"
+  heatBy: "target",            // "target" או "origin"
+  focus: "",                   // קוד מדינה למיקוד, או "" לכולן
+  animPaused: false,
+  reduceMotion: false,
+  logPaused: false,
+  agg: null,                   // תוצאת aggregate() לשכבה הנוכחית
+  sampler: null,               // פונקציה שבוחרת זוג מדינות אקראי לפי משקל
+  nameByA2: new Map(),         // שמות באנגלית מהנתונים, למדינות שלא בטבלה
+};
+
+function currentPairs() {
+  return state.dataset ? state.dataset[state.layer] : [];
+}
+
+/* =====================================================================
+   עזרים כלליים: עיצוב מספרים, דגלים, הגנה מ-HTML זדוני
+   ===================================================================== */
+
+// "בריחה" מתווים מיוחדים: מונע הזרקת HTML (XSS) אם הנתונים מהרשת מכילים קוד
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+// אמוג'י דגל: כל אות הופכת ל"סמל אזורי" (Regional Indicator). שתי אותיות = דגל.
+// (ב-Windows הדפדפן מציג לרוב את האותיות במקום ציור של דגל, וזה תקין.)
+function flagEmoji(a2) {
+  if (!/^[A-Z]{2}$/.test(a2)) return "🏳️";
+  return String.fromCodePoint(...[...a2].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65));
+}
+
+function countryName(a2) {
+  return COUNTRY_BY_A2.get(a2)?.he || state.nameByA2.get(a2) || a2;
+}
+function countryNameEn(a2) {
+  return COUNTRY_BY_A2.get(a2)?.en || state.nameByA2.get(a2) || a2;
+}
+
+const fmtPct = v => v.toFixed(1) + "%";
+const fmtInt = new Intl.NumberFormat("he-IL");
+const fmtCompact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+const fmtLocalTime = new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "medium" });
+
+function isoSeconds(date) {
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+function fmtDuration(totalSec) {
+  const s = Math.round(totalSec);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const pad = n => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+}
+
+function routeTier(value) {
+  const t = CONFIG.ROUTE_TIERS;
+  return value >= t.critical ? "critical" : value >= t.high ? "high" : value >= t.medium ? "medium" : "low";
+}
+
+const SEVERITY_LABELS = { low: "נמוכה", medium: "בינונית", high: "גבוהה", critical: "קריטית" };
+const SEVERITY_RANK = { low: 0, medium: 1, high: 2, critical: 3 };
+const LAYER_LABELS = { L3: "L3/4", L7: "L7" };
+
+/* =====================================================================
+   3. MAP: מפת העולם (D3 + TopoJSON)
+   ===================================================================== */
+const mapState = {
+  ready: false,
+  projection: null,
+  countryPaths: null,       // כל צורות המדינות (בחירת D3)
+  gRoutes: null, gHot: null, gFx: null,
+  routeEls: new Map(),      // "US>CN" → אלמנט ה-path של הנתיב (לאנימציית קליעים)
+  activeProjectiles: 0,
+};
+
+const pairKey = (origin, target) => origin + ">" + target;
+
+async function initMap() {
+  const status = document.getElementById("map-status");
+  // אם הספריות לא נטענו (למשל אין אינטרנט), שאר הדף ממשיך לעבוד בלי מפה
+  if (!window.d3 || !window.topojson) {
+    status.textContent = "לא ניתן היה לטעון את ספריות המפה (D3 / TopoJSON). בדקו חיבור לאינטרנט. שאר הלוח ממשיך לעבוד.";
+    return;
+  }
+  try {
+    const world = await fetchJson(CONFIG.WORLD_ATLAS_URL);
+    // ממירים TopoJSON (פורמט דחוס) ל-GeoJSON, ומסננים את אנטארקטיקה (010) כדי לחסוך מקום
+    const countries = topojson.feature(world, world.objects.countries).features
+      .filter(f => f.id !== "010");
+
+    const svg = d3.select("#map");
+    // הטלה (Projection): הופכת קו רוחב/אורך לנקודה על המסך. Natural Earth נראית טבעית לעין.
+    const projection = d3.geoNaturalEarth1()
+      .fitExtent([[6, 6], [954, 494]], { type: "FeatureCollection", features: countries });
+    const path = d3.geoPath(projection);
+
+    svg.append("path").attr("class", "graticule").attr("d", path(d3.geoGraticule10()));
+
+    // מחברים לכל צורת מדינה את קוד ה-alpha-2 שלה, דרך הקוד המספרי
+    for (const f of countries) {
+      const info = COUNTRY_BY_NUMERIC.get(Number(f.id));
+      f.a2 = info ? info.a2 : null;
+      f.label = info ? info.he : (f.properties?.name || "מדינה לא מזוהה");
+    }
+
+    mapState.countryPaths = svg.append("g").attr("class", "countries")
+      .selectAll("path").data(countries).join("path")
+      .attr("class", "country")
+      .attr("d", path)
+      .on("mouseenter mousemove", (ev, f) => showTooltip(countryTooltipHtml(f.a2, f.label), ev.clientX, ev.clientY))
+      .on("mouseleave blur", hideTooltip)
+      .on("focus", function (ev, f) { tooltipAtElement(countryTooltipHtml(f.a2, f.label), this); })
+      .on("click", (ev, f) => { if (f.a2) setFocusCountry(f.a2); })
+      .on("keydown", (ev, f) => { if ((ev.key === "Enter" || ev.key === " ") && f.a2) { ev.preventDefault(); setFocusCountry(f.a2); } });
+
+    mapState.gRoutes = svg.append("g").attr("class", "routes");
+    mapState.gHot = svg.append("g").attr("class", "hot");
+    mapState.gFx = svg.append("g").attr("class", "fx");
+    mapState.projection = projection;
+    mapState.ready = true;
+    status.hidden = true;
+    renderMap();
+  } catch (err) {
+    status.textContent = "לא ניתן היה לטעון את מפת העולם (" + err.message + "). שאר הלוח ממשיך לעבוד.";
+  }
+}
+
+// ממיר קוד מדינה לנקודה [x, y] על המפה, לפי נקודת המרכז בטבלה
+function projectPoint(a2) {
+  const c = COUNTRY_BY_A2.get(a2);
+  if (!c || !mapState.projection) return null;
+  return mapState.projection([c.lon, c.lat]);
+}
+
+// מצייר עקומה בין שתי נקודות. אם המקור והיעד זהים, מציירים "לולאה" קטנה.
+function arcPath(a, b) {
+  const [x1, y1] = a, [x2, y2] = b;
+  const dx = x2 - x1, dy = y2 - y1;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 2) {
+    return `M${x1},${y1} C${x1 - 26},${y1 - 38} ${x1 + 26},${y1 - 38} ${x1},${y1}`;
+  }
+  // נקודת בקרה באמצע, מוזזת בניצב לקו, תמיד כלפי מעלה, כך שהעקומה "קשתית"
+  let nx = -dy / dist, ny = dx / dist;
+  if (ny > 0) { nx = -nx; ny = -ny; }
+  const bend = dist * 0.25;
+  const cx = (x1 + x2) / 2 + nx * bend, cy = (y1 + y2) / 2 + ny * bend;
+  return `M${x1},${y1} Q${cx},${cy} ${x2},${y2}`;
+}
+
+function renderMap() {
+  if (!mapState.ready || !state.agg) return;
+  renderChoropleth();
+  renderRoutes();
+  renderHotZones();
+  applyFocus();
+}
+
+/* --- 3.1 מפת חום (Choropleth): צבע המדינה לפי חלקה בהתקפות --- */
+function heatStops() {
+  const cs = getComputedStyle(document.documentElement);
+  return [0, 1, 2, 3, 4].map(i => cs.getPropertyValue(`--heat-${i}`).trim());
+}
+
+function renderChoropleth() {
+  const shares = state.heatBy === "target" ? state.agg.asTarget : state.agg.asOrigin;
+  const max = Math.max(0.1, ...shares.values());
+  // סקאלת שורש: מדגישה גם ערכים קטנים, כדי שלא ייבלעו ליד המדינות הגדולות
+  const scale = d3.scaleSequentialSqrt(d3.piecewise(d3.interpolateRgb, heatStops())).domain([0, max]);
+
+  mapState.countryPaths
+    .style("fill", f => (f.a2 && shares.get(f.a2)) ? scale(shares.get(f.a2)) : null)
+    .classed("has-data", f => !!f.a2 && (state.agg.asTarget.has(f.a2) || state.agg.asOrigin.has(f.a2)))
+    .attr("tabindex", f => (f.a2 && (state.agg.asTarget.has(f.a2) || state.agg.asOrigin.has(f.a2))) ? 0 : null)
+    .attr("aria-label", f => {
+      if (!f.a2) return null;
+      const t = state.agg.asTarget.get(f.a2) || 0, o = state.agg.asOrigin.get(f.a2) || 0;
+      return `${f.label}: ${fmtPct(t)} כיעד, ${fmtPct(o)} כמקור`;
+    });
+}
+
+// המקרא של מפת החום (HTML רגיל, בלי D3)
+function renderHeatLegend() {
+  if (!state.agg) return;
+  const shares = state.heatBy === "target" ? state.agg.asTarget : state.agg.asOrigin;
+  const max = Math.max(0, ...shares.values());
+  // בכיוון ימין-לשמאל: ערך נמוך בצד ימין
+  document.getElementById("heat-bar").style.background = `linear-gradient(to left, ${heatStops().join(", ")})`;
+  document.getElementById("heat-max").textContent = fmtPct(max);
+  document.getElementById("heat-legend-title").textContent = state.heatBy === "target"
+    ? "חלק מההתקפות הנכנסות למדינה (סקאלת שורש)"
+    : "חלק מההתקפות שיוצאות מהמדינה (סקאלת שורש)";
+}
+
+function renderRouteLegend() {
+  const t = CONFIG.ROUTE_TIERS;
+  const items = [
+    ["low", `נמוכה < ${t.medium}%`], ["medium", `בינונית ${t.medium}–${t.high}%`],
+    ["high", `גבוהה ${t.high}–${t.critical}%`], ["critical", `קריטית ≥ ${t.critical}%`],
+  ];
+  document.getElementById("route-legend").innerHTML =
+    items.map(([cls, label]) => `<li><span class="swatch ${cls}"></span>${label}</li>`).join("") +
+    `<li><span class="swatch hot"></span>אזור חם (≥ ${CONFIG.HOTZONE_THRESHOLD_PERCENT}% נכנס)</li>`;
+}
+
+/* --- 3.2 נתיבי התקפה: קווים מעוקלים מהמקור ליעד --- */
+function renderRoutes() {
+  const g = mapState.gRoutes;
+  g.selectAll("*").remove();
+  mapState.routeEls.clear();
+  clearEffects();
+
+  const pairs = currentPairs();
+  const maxPair = state.agg.maxPair;
+  // מציירים מהקטן לגדול, כך שהנתיבים החשובים יהיו מעל
+  for (const p of [...pairs].reverse()) {
+    const a = projectPoint(p.origin), b = projectPoint(p.target);
+    if (!a || !b) continue; // מדינה בלי נקודת מרכז בטבלה: אי אפשר לצייר
+    const d = arcPath(a, b);
+    const group = g.append("g").attr("class", `route tier-${routeTier(p.value)}`).datum(p);
+    const line = group.append("path").attr("class", "route-line").attr("d", d)
+      .style("stroke-width", 1 + 4 * Math.sqrt(p.value / maxPair));
+    // קו שקוף ורחב יותר, רק כדי שיהיה קל לרחף מעליו עם העכבר
+    group.append("path").attr("class", "route-hit").attr("d", d)
+      .attr("tabindex", 0).attr("role", "button")
+      .attr("aria-label", `נתיב: ${countryName(p.origin)} אל ${countryName(p.target)}, ${fmtPct(p.value)}`)
+      .on("mouseenter mousemove", ev => showTooltip(routeTooltipHtml(p), ev.clientX, ev.clientY))
+      .on("mouseleave blur", hideTooltip)
+      .on("focus", function () { tooltipAtElement(routeTooltipHtml(p), this); })
+      .on("click", () => setFocusCountry(p.target))
+      .on("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); setFocusCountry(p.target); } });
+    mapState.routeEls.set(pairKey(p.origin, p.target), line.node());
+  }
+}
+
+/* --- 3.3 אזורים חמים: טבעת פועמת סביב מדינות שמעל הסף --- */
+function hotZoneList() {
+  return [...state.agg.asTarget]
+    .filter(([, v]) => v >= CONFIG.HOTZONE_THRESHOLD_PERCENT)
+    .sort((a, b) => b[1] - a[1]);
+}
+
+function renderHotZones() {
+  const g = mapState.gHot;
+  g.selectAll("*").remove();
+  for (const [a2] of hotZoneList()) {
+    const pt = projectPoint(a2);
+    if (!pt) continue;
+    g.append("circle").attr("class", "hot-ring").attr("cx", pt[0]).attr("cy", pt[1]).attr("r", 9);
+    g.append("circle").attr("class", "hot-core").attr("cx", pt[0]).attr("cy", pt[1]).attr("r", 2.5);
+  }
+}
+
+/* --- 3.4 מיקוד במדינה: מעמעם את כל הנתיבים שלא קשורים אליה --- */
+function applyFocus() {
+  if (!mapState.ready) return;
+  const f = state.focus;
+  mapState.gRoutes.selectAll("g.route")
+    .classed("dim", p => !!f && p.origin !== f && p.target !== f)
+    .classed("focus", p => !!f && (p.origin === f || p.target === f));
+  mapState.countryPaths.classed("focused", d => !!f && d.a2 === f);
+}
+
+/* --- 3.5 אנימציה לכל אירוע מדומה: "קליע" לאורך הנתיב ופעימה ביעד --- */
+function animateEvent(ev) {
+  if (!mapState.ready || state.animPaused || document.hidden) return;
+  if (state.focus && ev.origin !== state.focus && ev.target !== state.focus) return;
+  const line = mapState.routeEls.get(pairKey(ev.origin, ev.target));
+  if (!line) return;
+
+  // במצב "הפחתת תנועה": רק הבהוב קצר של הנתיב, בלי תזוזה
+  if (state.reduceMotion) {
+    line.classList.add("flash");
+    setTimeout(() => line.classList.remove("flash"), 500);
+    return;
+  }
+  if (mapState.activeProjectiles >= CONFIG.MAX_PROJECTILES) return;
+  mapState.activeProjectiles++;
+
+  const length = line.getTotalLength();
+  const dot = mapState.gFx.append("circle")
+    .attr("class", `projectile sev-${ev.severity}`)
+    .attr("r", 2.4 + SEVERITY_RANK[ev.severity] * 0.8);
+
+  let finished = false;
+  const done = reachedTarget => {
+    if (finished) return;
+    finished = true;
+    mapState.activeProjectiles--;
+    dot.remove();
+    if (reachedTarget) pulseAt(line.getPointAtLength(length), ev.severity);
+  };
+  dot.transition()
+    .duration(900 + Math.random() * 700)
+    .ease(d3.easeQuadIn)
+    .attrTween("transform", () => t => {
+      const p = line.getPointAtLength(t * length);
+      return `translate(${p.x},${p.y})`;
+    })
+    .on("end", () => done(true))
+    .on("interrupt", () => done(false));
+}
+
+function pulseAt(point, severity) {
+  mapState.gFx.append("circle")
+    .attr("class", `pulse sev-${severity}`)
+    .attr("cx", point.x).attr("cy", point.y).attr("r", 2)
+    .transition().duration(800).ease(d3.easeCubicOut)
+    .attr("r", 10 + SEVERITY_RANK[severity] * 3).style("opacity", 0)
+    .remove();
+}
+
+function clearEffects() {
+  if (!mapState.gFx) return;
+  mapState.gFx.selectAll("*").interrupt().remove();
+  mapState.activeProjectiles = 0;
+}
+
+/* --- 3.6 חלוניות מידע (Tooltips) --- */
+const tooltipEl = document.getElementById("tooltip");
+
+function showTooltip(html, x, y) {
+  tooltipEl.innerHTML = html;
+  tooltipEl.hidden = false;
+  const r = tooltipEl.getBoundingClientRect();
+  let left = x + 14, top = y + 14;
+  if (left + r.width > window.innerWidth - 8) left = x - r.width - 14;
+  if (top + r.height > window.innerHeight - 8) top = y - r.height - 14;
+  tooltipEl.style.left = Math.max(8, left) + "px";
+  tooltipEl.style.top = Math.max(8, top) + "px";
+}
+
+function tooltipAtElement(html, el) {
+  const r = el.getBoundingClientRect();
+  showTooltip(html, r.left + r.width / 2, r.top + r.height / 2);
+}
+
+function hideTooltip() { tooltipEl.hidden = true; }
+
+function partnersHtml(list) {
+  if (!list.length) return `<div class="tt-muted">אין</div>`;
+  return "<ul>" + list.map(x =>
+    `<li>${flagEmoji(x.a2)} ${esc(countryName(x.a2))} · <bdi>${fmtPct(x.value)}</bdi></li>`).join("") + "</ul>";
+}
+
+function countryTooltipHtml(a2, label) {
+  if (!a2 || !state.agg || (!state.agg.asTarget.has(a2) && !state.agg.asOrigin.has(a2))) {
+    return `<strong>${esc(label)}</strong><div class="tt-muted">אין נתונים בחלון הנוכחי (${LAYER_LABELS[state.layer]})</div>`;
+  }
+  const t = state.agg.asTarget.get(a2) || 0, o = state.agg.asOrigin.get(a2) || 0;
+  return `<strong>${flagEmoji(a2)} ${esc(countryName(a2))}</strong>
+    <div class="tt-row"><span>חלק כיעד</span><bdi>${fmtPct(t)}</bdi></div>
+    <div class="tt-row"><span>חלק כמקור</span><bdi>${fmtPct(o)}</bdi></div>
+    <div class="tt-muted">תוקפים מובילים:</div>${partnersHtml(topPartners(a2, "attackers"))}
+    <div class="tt-muted">יעדים מובילים:</div>${partnersHtml(topPartners(a2, "targets"))}
+    <div class="tt-muted">לחיצה: מיקוד במדינה</div>`;
+}
+
+function routeTooltipHtml(p) {
+  const tier = routeTier(p.value);
+  const inside = p.origin === p.target ? " (בתוך המדינה)" : "";
+  return `<strong>${flagEmoji(p.origin)} ${esc(countryName(p.origin))} ← ${flagEmoji(p.target)} ${esc(countryName(p.target))}${inside}</strong>
+    <div class="tt-row"><span>חלק מכלל ההתקפות</span><bdi>${fmtPct(p.value)}</bdi></div>
+    <div class="tt-row"><span>דרגה</span><span>${SEVERITY_LABELS[tier]}</span></div>
+    <div class="tt-row"><span>דירוג</span><bdi>#${p.rank}</bdi></div>
+    <div class="tt-muted">שכבה: ${LAYER_LABELS[state.layer]} · נתון מצטבר, לא התקפה בודדת</div>`;
+}
+
+/* =====================================================================
+   4. SIMULATOR: יצירת אירועים מדומים, משוקללים לפי הנתונים האמיתיים
+   ===================================================================== */
+
+// טווחי כתובות IP ששמורים לתיעוד בלבד (RFC 5737). הם לא מנותבים באינטרנט,
+// ולכן אף כתובת ביומן לא יכולה להפנות למחשב אמיתי.
+const DOC_IP_PREFIXES = ["192.0.2", "198.51.100", "203.0.113"];
+
+const randInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const ephemeralPort = () => randInt(32768, 60999); // פורטים זמניים בצד הלקוח
+
+// בחירה אקראית לפי משקל: פריט עם משקל כפול ייבחר בערך פי שניים יותר
+function weightedPick(items, weightOf) {
+  const total = items.reduce((sum, it) => sum + weightOf(it), 0);
+  let r = Math.random() * total;
+  for (const it of items) {
+    r -= weightOf(it);
+    if (r < 0) return it;
+  }
+  return items[items.length - 1];
+}
+
+// מספר אקראי עם "זנב כבד": רוב הערכים קטנים, מעט מאוד ערכים ענקיים (כמו במציאות)
+function heavyTail(min, max, skew) {
+  return min * Math.pow(max / min, Math.pow(Math.random(), skew));
+}
+
+// וקטורי תקיפה. הפרוטוקול והפורטים תואמים את אופי ההתקפה:
+// בהתקפות הגברה (Amplification) התשובות מגיעות מפורט השירות (DNS=53, NTP=123) אל פורט אקראי אצל הקורבן.
+const ATTACK_VECTORS = {
+  L3: [
+    { name: "UDP flood",         weight: 30, proto: "UDP", src: ephemeralPort, dst: () => pick([53, 80, 443, 3074, 27015, ephemeralPort()]), packetBytes: 512 },
+    { name: "SYN flood",         weight: 25, proto: "TCP", src: ephemeralPort, dst: () => pick([80, 443, 443, 22, 3389]), packetBytes: 60 },
+    { name: "DNS amplification", weight: 15, proto: "UDP", src: () => 53,  dst: ephemeralPort, packetBytes: 1400, showSrc: true },
+    { name: "NTP amplification", weight: 8,  proto: "UDP", src: () => 123, dst: ephemeralPort, packetBytes: 468,  showSrc: true },
+    { name: "ACK flood",         weight: 12, proto: "TCP", src: ephemeralPort, dst: () => pick([80, 443]), packetBytes: 60 },
+    { name: "GRE flood",         weight: 10, proto: "GRE", src: null, dst: null, packetBytes: 576 }, // ל-GRE אין פורטים
+  ],
+  L7: [
+    { name: "HTTP GET flood",     weight: 45, proto: "HTTPS", src: ephemeralPort, dst: () => 443, rpsFactor: 1 },
+    { name: "HTTP POST flood",    weight: 20, proto: "HTTPS", src: ephemeralPort, dst: () => 443, rpsFactor: 0.6 },
+    // Slowloris פותח הרבה חיבורים ושולח לאט מאוד, ולכן קצב הבקשות שלו נמוך
+    { name: "Slowloris",          weight: 10, proto: "HTTP",  src: ephemeralPort, dst: () => pick([80, 443]), rpsFactor: 0.02 },
+    { name: "Cache-bypass flood", weight: 25, proto: "HTTPS", src: ephemeralPort, dst: () => 443, rpsFactor: 0.8 },
+  ],
+};
+
+function simulatedSourceIp() {
+  const ip = pick(DOC_IP_PREFIXES) + "." + randInt(1, 254);
+  // בדיקת בטיחות: מוודאים שלעולם לא נוצרת כתובת מחוץ לטווחי התיעוד
+  if (!DOC_IP_PREFIXES.some(prefix => ip.startsWith(prefix + "."))) throw new Error("IP outside RFC 5737");
+  return ip;
+}
+
+function classifySeverity(value, thresholds) {
+  return value >= thresholds.critical ? "critical" : value >= thresholds.high ? "high"
+    : value >= thresholds.medium ? "medium" : "low";
+}
+
+// בונה פונקציה שבוחרת זוג מדינות לפי האחוזים (סכום מצטבר + מספר אקראי)
+function buildSampler(pairs) {
+  let acc = 0;
+  const cumulative = pairs.map(p => (acc += p.value));
+  return () => {
+    if (!pairs.length) return null;
+    const r = Math.random() * acc;
+    const i = cumulative.findIndex(c => r < c);
+    return pairs[i === -1 ? pairs.length - 1 : i];
+  };
+}
+
+let eventSeq = 0;
+
+function generateEvent() {
+  const pair = state.sampler && state.sampler();
+  if (!pair) return null;
+  const layer = state.layer;
+  const vector = weightedPick(ATTACK_VECTORS[layer], v => v.weight);
+  const now = new Date();
+
+  const ev = {
+    id: "SIM-" + String(++eventSeq).padStart(6, "0"),
+    time: now,
+    iso: isoSeconds(now),
+    layer,
+    vector: vector.name,
+    origin: pair.origin,
+    target: pair.target,
+    sourceIp: simulatedSourceIp(),
+    proto: vector.proto,
+    srcPort: vector.src ? vector.src() : null,
+    dstPort: vector.dst ? vector.dst() : null,
+    showSrc: !!vector.showSrc,
+    gbps: null, mpps: null, rps: null,
+    durationSec: heavyTail(15, 3 * 3600, 2.2),
+    simulated: true,
+  };
+
+  if (layer === "L3") {
+    ev.gbps = heavyTail(0.2, 1500, 2.4);
+    // חבילות בשנייה = ביטים בשנייה ÷ (גודל חבילה × 8). חבילות קטנות (SYN) = הרבה חבילות.
+    ev.mpps = ev.gbps * 1e9 / (vector.packetBytes * 8) / 1e6;
+    ev.severity = classifySeverity(ev.gbps, CONFIG.SEVERITY_L3_GBPS);
+  } else {
+    ev.rps = Math.round(heavyTail(800, 20000000, 2.6) * vector.rpsFactor);
+    ev.severity = classifySeverity(ev.rps, CONFIG.SEVERITY_L7_RPS);
+  }
+
+  ev.searchText = [ev.id, ev.iso, ev.vector, ev.sourceIp, ev.proto, ev.origin, ev.target,
+    countryName(ev.origin), countryName(ev.target), countryNameEn(ev.origin), countryNameEn(ev.target),
+    SEVERITY_LABELS[ev.severity], ev.severity, LAYER_LABELS[layer]].join(" ").toLowerCase();
+  return ev;
+}
+
+// תזמון: הזמן בין אירועים הוא אקראי (התפלגות מעריכית), כמו הגעת לקוחות לתור.
+// בממוצע יוצא EVENTS_PER_MINUTE אירועים בדקה.
+let simTimer = null;
+function scheduleNextEvent() {
+  const meanMs = 60000 / Math.max(1, CONFIG.EVENTS_PER_MINUTE);
+  const delay = Math.max(120, -Math.log(1 - Math.random()) * meanMs);
+  simTimer = setTimeout(() => {
+    const ev = generateEvent();
+    if (ev) handleNewEvent(ev);
+    scheduleNextEvent();
+  }, delay);
+}
+
+function handleNewEvent(ev) {
+  recordStats(ev);
+  addToLog(ev);
+  animateEvent(ev);
+}
+
+/* =====================================================================
+   5. LOG: טבלת היומן, מסננים, מונים וייצוא CSV
+   ===================================================================== */
+let logEvents = [];      // האירועים בטבלה (החדש ראשון)
+let pendingEvents = [];  // אירועים שהגיעו בזמן שהיומן מושהה
+const recentEvents = []; // אירועים מ-5 הדקות האחרונות (למונים)
+let totalEvents = 0;
+const logFilters = { severity: "", layer: "", country: "", text: "" };
+const logBody = document.getElementById("log-body");
+
+function fmtPeak(ev) {
+  return ev.layer === "L3"
+    ? `${ev.gbps.toFixed(ev.gbps < 10 ? 2 : 1)} Gbps / ${ev.mpps.toFixed(ev.mpps < 10 ? 2 : 1)} Mpps`
+    : `${fmtCompact.format(ev.rps)} rps`;
+}
+
+function fmtProtoPort(ev) {
+  if (ev.proto === "GRE") return "GRE (IP 47) · ללא פורט";
+  const src = ev.showSrc ? `src ${ev.srcPort} → ` : "";
+  return `${ev.proto} · ${src}dst ${ev.dstPort}`;
+}
+
+// יצירת תא בטבלה. משתמשים ב-textContent (ולא innerHTML) כדי שטקסט לא יפורש כקוד.
+function cell(text, opts = {}) {
+  const td = document.createElement("td");
+  td.textContent = text;
+  if (opts.ltr) td.dir = "ltr";
+  if (opts.title) td.title = opts.title;
+  return td;
+}
+
+function buildRow(ev) {
+  const tr = document.createElement("tr");
+
+  const timeTd = document.createElement("td");
+  const time = document.createElement("time");
+  time.dateTime = ev.iso;
+  time.dir = "ltr";
+  time.textContent = ev.iso;
+  time.title = "שעון מקומי: " + fmtLocalTime.format(ev.time);
+  timeTd.append(time);
+
+  const idTd = document.createElement("td");
+  const tag = document.createElement("span");
+  tag.className = "sim-tag";
+  tag.textContent = "SIM";
+  tag.title = "אירוע מדומה";
+  idTd.append(tag, document.createTextNode(ev.id));
+
+  const sevTd = document.createElement("td");
+  const sev = document.createElement("span");
+  sev.className = "sev " + ev.severity;
+  sev.textContent = SEVERITY_LABELS[ev.severity];
+  sevTd.append(sev);
+
+  tr.append(
+    timeTd,
+    idTd,
+    cell(LAYER_LABELS[ev.layer], { ltr: true }),
+    cell(ev.vector, { ltr: true }),
+    cell(`${flagEmoji(ev.origin)} ${countryName(ev.origin)}`, { title: countryNameEn(ev.origin) }),
+    cell(`${flagEmoji(ev.target)} ${countryName(ev.target)}`, { title: countryNameEn(ev.target) }),
+    cell(ev.sourceIp, { ltr: true, title: "כתובת מדומה מטווח תיעוד (RFC 5737)" }),
+    cell(fmtProtoPort(ev), { ltr: true }),
+    cell(fmtPeak(ev), { ltr: true }),
+    cell(fmtDuration(ev.durationSec), { ltr: true }),
+    sevTd,
+  );
+  return tr;
+}
+
+function getRow(ev) {
+  if (!ev.row) ev.row = buildRow(ev);
+  return ev.row;
+}
+
+function matchesFilters(ev) {
+  const f = logFilters;
+  if (f.severity && ev.severity !== f.severity) return false;
+  if (f.layer && ev.layer !== f.layer) return false;
+  if (f.country && ev.origin !== f.country && ev.target !== f.country) return false;
+  if (f.text && !ev.searchText.includes(f.text)) return false;
+  return true;
+}
+
+function emptyRow() {
+  const tr = document.createElement("tr");
+  tr.className = "empty-row";
+  const td = document.createElement("td");
+  td.colSpan = 11;
+  td.textContent = logEvents.length ? "אין אירועים שתואמים את המסננים" : "ממתין לאירועים…";
+  tr.append(td);
+  return tr;
+}
+
+// ציור מחדש של כל הטבלה (אחרי שינוי מסנן, ניקוי או חזרה מהשהיה)
+function renderLogTable() {
+  const rows = logEvents.filter(matchesFilters).map(getRow);
+  rows.forEach(r => r.classList.remove("new"));
+  logBody.replaceChildren(...(rows.length ? rows : [emptyRow()]));
+  updateLogStatus();
+}
+
+function addToLog(ev) {
+  if (state.logPaused) {
+    pendingEvents.unshift(ev);
+    if (pendingEvents.length > CONFIG.MAX_LOG_ROWS) pendingEvents.pop();
+    updateLogStatus();
+    return;
+  }
+  logEvents.unshift(ev);
+  // שומרים רק MAX_LOG_ROWS שורות; הישנות ביותר נמחקות
+  while (logEvents.length > CONFIG.MAX_LOG_ROWS) {
+    const removed = logEvents.pop();
+    if (removed.row) removed.row.remove();
+  }
+  if (matchesFilters(ev)) {
+    const empty = logBody.querySelector(".empty-row");
+    if (empty) empty.remove();
+    const row = getRow(ev);
+    row.classList.add("new");
+    logBody.prepend(row);
+  }
+  updateLogStatus();
+}
+
+function updateLogStatus() {
+  const shown = logEvents.filter(matchesFilters).length;
+  let text = `מוצגות ${fmtInt.format(shown)} מתוך ${fmtInt.format(logEvents.length)} שורות (מקסימום ${CONFIG.MAX_LOG_ROWS}).`;
+  if (state.logPaused) text += ` היומן מושהה: ${fmtInt.format(pendingEvents.length)} אירועים חדשים ממתינים.`;
+  document.getElementById("log-status").textContent = text;
+}
+
+/* --- מונים מעל היומן --- */
+function recordStats(ev) {
+  totalEvents++;
+  recentEvents.push(ev);
+}
+
+function updateStats() {
+  const now = Date.now();
+  // מוחקים אירועים ישנים מ-5 דקות
+  while (recentEvents.length && now - recentEvents[0].time.getTime() > 5 * 60000) recentEvents.shift();
+  const lastMinute = recentEvents.filter(e => now - e.time.getTime() <= 60000);
+
+  document.getElementById("stat-minute").textContent = fmtInt.format(lastMinute.length);
+  document.getElementById("stat-total").textContent = fmtInt.format(totalEvents);
+
+  // שיא נוכחי: האירוע החזק ביותר בדקה האחרונה, בשכבה הנוכחית
+  const sameLayer = lastMinute.filter(e => e.layer === state.layer);
+  let peakText = "—";
+  if (sameLayer.length) {
+    peakText = state.layer === "L3"
+      ? Math.max(...sameLayer.map(e => e.gbps)).toFixed(1) + " Gbps"
+      : fmtCompact.format(Math.max(...sameLayer.map(e => e.rps))) + " rps";
+  }
+  document.getElementById("stat-peak").textContent = peakText;
+  document.getElementById("stat-peak-label").textContent = `שיא נוכחי · ${LAYER_LABELS[state.layer]} (דקה אחרונה)`;
+
+  // היעד המותקף ביותר ב-5 הדקות האחרונות
+  const counts = new Map();
+  for (const e of recentEvents) counts.set(e.target, (counts.get(e.target) || 0) + 1);
+  const top = [...counts].sort((a, b) => b[1] - a[1])[0];
+  document.getElementById("stat-top-target").textContent =
+    top ? `${flagEmoji(top[0])} ${countryName(top[0])} (${top[1]})` : "—";
+}
+
+/* --- ייצוא CSV --- */
+// הגנה מ-"CSV Injection": תא שמתחיל ב- = + - @ עלול להתפרש בגיליון אלקטרוני כנוסחה
+function csvCell(value) {
+  let s = value == null ? "" : String(value);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+
+function exportCsv() {
+  const header = ["timestamp_utc", "event_id", "layer", "vector", "origin_alpha2", "origin_name",
+    "target_alpha2", "target_name", "source_ip", "protocol", "src_port", "dst_port",
+    "peak_gbps", "peak_mpps", "peak_rps", "duration_s", "severity", "data_type"];
+  const rows = logEvents.filter(matchesFilters).map(ev => [
+    ev.iso, ev.id, LAYER_LABELS[ev.layer], ev.vector, ev.origin, countryNameEn(ev.origin),
+    ev.target, countryNameEn(ev.target), ev.sourceIp, ev.proto, ev.srcPort ?? "", ev.dstPort ?? "",
+    ev.gbps != null ? ev.gbps.toFixed(2) : "", ev.mpps != null ? ev.mpps.toFixed(2) : "",
+    ev.rps ?? "", Math.round(ev.durationSec), ev.severity, "SIMULATED",
+  ]);
+  const csv = [header, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
+  // BOM (﻿) בהתחלה כדי ש-Excel יזהה UTF-8
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `ddos-simulated-log-${isoSeconds(new Date()).replace(/:/g, "-")}.csv`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* =====================================================================
+   6. UI: חיבור הכפתורים, כותרת, אזהרות, טעינה ורענון
+   ===================================================================== */
+
+function showWarning(message) {
+  const box = document.createElement("div");
+  box.className = "warning";
+  const text = document.createElement("span");
+  text.textContent = "⚠️ " + message;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "×";
+  close.setAttribute("aria-label", "סגירת ההודעה");
+  close.addEventListener("click", () => box.remove());
+  box.append(text, close);
+  document.getElementById("warnings").append(box);
+}
+
+function clearWarnings() {
+  document.getElementById("warnings").replaceChildren();
+}
+
+const MODE_LABELS = { demo: "דמו (מובנה)", snapshot: "תמונת מצב (קובץ מקומי)", live: "חי (דרך Proxy)" };
+
+function updateHeader() {
+  const ds = state.dataset;
+  const badge = document.getElementById("honesty-badge");
+  if (ds.isSample) {
+    badge.textContent = "מפה: נתוני דוגמה, לא נתונים אמיתיים · יומן אירועים: מדומה, משוקלל לפי נתוני הדוגמה";
+    badge.classList.add("is-demo");
+  } else {
+    badge.textContent = "מפה: נתונים מצטברים של Cloudflare Radar (CC BY-NC 4.0) · יומן אירועים: מדומה, משוקלל לפי נתונים אמיתיים";
+    badge.classList.remove("is-demo");
+  }
+
+  let modeText = MODE_LABELS[CONFIG.DATA_MODE] || CONFIG.DATA_MODE;
+  if (ds.fallback) modeText += " ← גיבוי: דמו";
+  else if (ds.isSample && ds.mode !== "demo") modeText += " (קובץ דוגמה)";
+  document.getElementById("meta-mode").textContent = modeText;
+
+  const updated = document.getElementById("meta-updated");
+  updated.textContent = fmtLocalTime.format(ds.loadedAt);
+  updated.title = "UTC: " + isoSeconds(ds.loadedAt);
+
+  const win = document.getElementById("meta-window");
+  win.textContent = ds.window
+    ? `${fmtLocalTime.format(ds.window.start)} – ${fmtLocalTime.format(ds.window.end)}`
+    : (ds.isSample ? "נתוני דוגמה קבועים" : "24 השעות האחרונות");
+}
+
+// בונה רשימת Top 5 עם פסים קטנים. לחיצה על שורה = מיקוד במדינה.
+function renderTopList(listId, shares, barClass) {
+  const top = [...shares].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const max = top.length ? top[0][1] : 1;
+  document.getElementById(listId).innerHTML = top.map(([a2, v]) => `
+    <li><button type="button" class="top-item" data-country="${esc(a2)}"
+        aria-label="${esc(countryName(a2))}: ${fmtPct(v)}. לחיצה: מיקוד במדינה">
+      <span>${flagEmoji(a2)} ${esc(countryName(a2))}</span>
+      <bdi class="val">${fmtPct(v)}</bdi>
+      <span class="bar ${barClass}" aria-hidden="true"><span style="width:${(v / max * 100).toFixed(1)}%"></span></span>
+    </button></li>`).join("");
+}
+
+function renderSidePanels() {
+  renderTopList("top-targets", state.agg.asTarget, "targets");
+  renderTopList("top-origins", state.agg.asOrigin, "origins");
+
+  const hot = hotZoneList();
+  document.getElementById("hot-hint").textContent =
+    `מדינות שחלקן בהתקפות הנכנסות (${LAYER_LABELS[state.layer]}) הוא ${CONFIG.HOTZONE_THRESHOLD_PERCENT}% ומעלה.`;
+  document.getElementById("hot-zones").innerHTML = hot.length
+    ? hot.map(([a2, v]) => `<li><button type="button" class="chip" data-country="${esc(a2)}">${flagEmoji(a2)} ${esc(countryName(a2))} <bdi>${fmtPct(v)}</bdi></button></li>`).join("")
+    : `<li class="hint">אין כרגע מדינות מעל הסף.</li>`;
+}
+
+// ממלא את רשימות המדינות (מיקוד ומסנן יומן). ישראל תמיד ברשימה.
+function populateCountrySelects() {
+  const codes = new Set(["IL"]);
+  for (const layer of ["L3", "L7"]) {
+    for (const p of state.dataset[layer]) { codes.add(p.origin); codes.add(p.target); }
+  }
+  const sorted = [...codes].sort((a, b) => countryName(a).localeCompare(countryName(b), "he"));
+  for (const id of ["focus-select", "filter-country"]) {
+    const select = document.getElementById(id);
+    const previous = select.value;
+    select.replaceChildren(new Option(id === "focus-select" ? "כל המדינות" : "הכול", ""));
+    for (const a2 of sorted) select.append(new Option(`${flagEmoji(a2)} ${countryName(a2)}`, a2));
+    select.value = codes.has(previous) ? previous : "";
+  }
+  state.focus = document.getElementById("focus-select").value;
+}
+
+// נקרא בכל פעם שהנתונים או השכבה משתנים
+function refreshView() {
+  state.agg = aggregate(currentPairs());
+  state.sampler = buildSampler(currentPairs());
+  document.getElementById("map-layer-label").textContent =
+    state.layer === "L3" ? "שכבה: L3/4 · רשת (מקור = מרכז נתונים שקלט)" : "שכבה: L7 · יישום (HTTP)";
+  for (const btn of document.querySelectorAll("[data-layer]")) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.layer === state.layer));
+  }
+  renderHeatLegend();
+  renderSidePanels();
+  renderMap();
+  updateStats();
+}
+
+function setFocusCountry(a2) {
+  state.focus = state.focus === a2 ? "" : a2; // לחיצה שנייה מבטלת את המיקוד
+  document.getElementById("focus-select").value = state.focus;
+  applyFocus();
+}
+
+/* --- טעינת נתונים, עם נפילה (fallback) לנתוני דוגמה בכל שגיאה --- */
+async function loadData() {
+  clearWarnings();
+  let dataset;
+  try {
+    if (CONFIG.DATA_MODE === "snapshot") dataset = await loadSnapshotDataset();
+    else if (CONFIG.DATA_MODE === "live") dataset = await loadLiveDataset();
+    else dataset = loadDemoDataset();
+  } catch (err) {
+    const hint = CONFIG.DATA_MODE === "snapshot" && location.protocol === "file:"
+      ? " (בפתיחה ישירה של הקובץ הדפדפן חוסם קריאת קבצים. הריצו שרת מקומי, ראו README.)" : "";
+    showWarning(`טעינת הנתונים במצב "${CONFIG.DATA_MODE}" נכשלה: ${err.message}${hint}. מוצגים נתוני דוגמה.`);
+    dataset = loadDemoDataset({ fallback: true });
+  }
+  state.dataset = dataset;
+  state.nameByA2 = new Map();
+  for (const layer of ["L3", "L7"]) {
+    for (const p of dataset[layer]) {
+      state.nameByA2.set(p.origin, p.originName);
+      state.nameByA2.set(p.target, p.targetName);
+    }
+  }
+  updateHeader();
+  populateCountrySelects();
+  refreshView();
+}
+
+/* --- ערכת נושא: אוטומטית ← כהה ← בהירה --- */
+const THEMES = ["auto", "dark", "light"];
+const THEME_LABELS = { auto: "אוטומטית", dark: "כהה", light: "בהירה" };
+
+function applyTheme(theme) {
+  if (theme === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+  document.getElementById("btn-theme").textContent = "ערכת נושא: " + THEME_LABELS[theme];
+  try { localStorage.setItem("ddos-theme", theme); } catch (e) { /* אחסון חסום: לא נורא */ }
+  // צבעי מפת החום נקראים מה-CSS, אז צריך לצייר מחדש
+  if (state.agg) { renderHeatLegend(); if (mapState.ready) renderChoropleth(); }
+}
+
+function setReduceMotion(on) {
+  state.reduceMotion = on;
+  document.documentElement.classList.toggle("reduce-motion", on);
+  document.getElementById("btn-motion").setAttribute("aria-pressed", String(on));
+  if (on) clearEffects();
+}
+
+function wireControls() {
+  // שכבה
+  for (const btn of document.querySelectorAll("[data-layer]")) {
+    btn.addEventListener("click", () => {
+      if (state.layer === btn.dataset.layer) return;
+      state.layer = btn.dataset.layer;
+      refreshView();
+    });
+  }
+  // מפת חום לפי יעד / מקור
+  for (const btn of document.querySelectorAll("[data-heat]")) {
+    btn.addEventListener("click", () => {
+      state.heatBy = btn.dataset.heat;
+      for (const b of document.querySelectorAll("[data-heat]")) b.setAttribute("aria-pressed", String(b === btn));
+      renderHeatLegend();
+      if (mapState.ready) renderChoropleth();
+    });
+  }
+  // מיקוד במדינה
+  document.getElementById("focus-select").addEventListener("change", e => {
+    state.focus = e.target.value;
+    applyFocus();
+  });
+  // לחיצה על מדינה ברשימות Top 5 או באזורים חמים
+  document.querySelector(".side").addEventListener("click", e => {
+    const btn = e.target.closest("[data-country]");
+    if (btn) setFocusCountry(btn.dataset.country);
+  });
+  // השהיית אנימציה
+  document.getElementById("btn-anim").addEventListener("click", e => {
+    state.animPaused = !state.animPaused;
+    e.currentTarget.setAttribute("aria-pressed", String(state.animPaused));
+    e.currentTarget.textContent = state.animPaused ? "▶ המשך אנימציה" : "⏸ השהיית אנימציה";
+    document.getElementById("map-wrap").classList.toggle("paused", state.animPaused);
+    if (state.animPaused) clearEffects();
+  });
+  // הפחתת תנועה
+  document.getElementById("btn-motion").addEventListener("click", () => setReduceMotion(!state.reduceMotion));
+  // ערכת נושא
+  document.getElementById("btn-theme").addEventListener("click", () => {
+    const current = document.documentElement.dataset.theme || "auto";
+    applyTheme(THEMES[(THEMES.indexOf(current) + 1) % THEMES.length]);
+  });
+  // רענון נתונים ידני
+  document.getElementById("btn-refresh").addEventListener("click", loadData);
+
+  // --- פקדי היומן ---
+  document.getElementById("btn-log-pause").addEventListener("click", e => {
+    state.logPaused = !state.logPaused;
+    e.currentTarget.setAttribute("aria-pressed", String(state.logPaused));
+    e.currentTarget.textContent = state.logPaused ? "▶ המשך יומן" : "⏸ השהיית יומן";
+    if (!state.logPaused && pendingEvents.length) {
+      logEvents = pendingEvents.concat(logEvents).slice(0, CONFIG.MAX_LOG_ROWS);
+      pendingEvents = [];
+      renderLogTable();
+    }
+    updateLogStatus();
+  });
+  const filterInputs = [["filter-severity", "severity"], ["filter-layer", "layer"], ["filter-country", "country"]];
+  for (const [id, key] of filterInputs) {
+    document.getElementById(id).addEventListener("change", e => { logFilters[key] = e.target.value; renderLogTable(); });
+  }
+  document.getElementById("filter-text").addEventListener("input", e => {
+    logFilters.text = e.target.value.trim().toLowerCase();
+    renderLogTable();
+  });
+  document.getElementById("btn-log-clear").addEventListener("click", () => {
+    logEvents = [];
+    pendingEvents = [];
+    renderLogTable();
+  });
+  document.getElementById("btn-export").addEventListener("click", exportCsv);
+
+  // הסתרת חלונית המידע בגלילה
+  window.addEventListener("scroll", hideTooltip, { passive: true });
+}
+
+/* --- נקודת ההתחלה של כל האפליקציה --- */
+async function main() {
+  // ערכת נושא שמורה (אם יש)
+  let savedTheme = "auto";
+  try { savedTheme = localStorage.getItem("ddos-theme") || "auto"; } catch (e) { /* אחסון חסום */ }
+  applyTheme(THEMES.includes(savedTheme) ? savedTheme : "auto");
+
+  // הפחתת תנועה: ברירת המחדל לפי הגדרות מערכת ההפעלה
+  const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+  setReduceMotion(motionQuery.matches);
+  motionQuery.addEventListener("change", e => setReduceMotion(e.matches));
+  // כשמערכת ההפעלה מחליפה כהה/בהיר, מעדכנים את צבעי מפת החום
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (state.agg) { renderHeatLegend(); if (mapState.ready) renderChoropleth(); }
+  });
+
+  wireControls();
+  renderRouteLegend();
+  renderLogTable();
+
+  await loadData();     // קודם הנתונים (תמיד מצליח, בזכות ה-fallback)
+  initMap();            // המפה נטענת ברקע; אם תיכשל, השאר ממשיך לעבוד
+  scheduleNextEvent();  // הפעלת הסימולטור
+  setInterval(updateStats, 1000);
+
+  if (CONFIG.DATA_MODE !== "demo") {
+    setInterval(loadData, CONFIG.DATA_REFRESH_MINUTES * 60000);
+  }
+}
+
+main();
+</script>
+</body>
+</html>
